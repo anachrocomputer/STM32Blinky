@@ -6,7 +6,7 @@ The programs are in C and may be compiled with GCC on Linux.
 
 ## Chips Supported ##
 
-At present, there's only support for the STM32L103 on the "Blue Pill" development board.
+At present, there's only support for the STM32F103 on the "Blue Pill" development board.
 
 ## ARM Toolchain ##
 
