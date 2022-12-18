@@ -24,19 +24,50 @@ static void initMCU(void)
 }
 
 
+/* initGPIOs --- set up the GPIO pins */
 
-int main(void)
+static void initGPIOs(void)
 {
-   volatile int dally;
-   
-   initMCU();
-   
    // Configure Reset and Clock Control
    RCC->APB2ENR |= RCC_APB2ENR_IOPCEN;                    // Enable clock to GPIO peripherals on APB2 bus
    
    // Configure PC13, the GPIO pin with the LED
    GPIOC->CRH &= ~(GPIO_CRH_MODE13 | GPIO_CRH_CNF13);     // Set PC13 to push-pull output mode
    GPIOC->CRH |= (GPIO_CRH_MODE13_0 | GPIO_CRH_MODE13_1); // Configure PC13 as output, 50MHz
+}
+
+
+/* initUARTs --- set up UART(s) and buffers, and connect to 'stdout' */
+
+static void initUARTs(void)
+{
+}
+
+
+/* initPWM --- set up PWM channels */
+
+static void initPWM(void)
+{
+}
+
+
+/* initMillisecondTimer --- set up a timer to interrupt every millisecond */
+
+static void initMillisecondTimer(void)
+{
+   // Set up timer for regular 1ms interrupt
+}
+
+
+int main(void)
+{
+   volatile int dally;
+   
+   initMCU();
+   initGPIOs();
+   initUARTs();
+   initPWM();
+   initMillisecondTimer();
    
    while (1) {
       GPIOC->BSRR = GPIO_BSRR_BR13; // GPIO pin PC13 LOW, LED on
