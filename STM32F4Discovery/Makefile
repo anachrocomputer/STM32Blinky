@@ -19,13 +19,13 @@ STFLASH=$(STLINK_TOOLS)/st-flash
 STM32MCU=STM32F407xx
 LDSCRIPT=/home/john/src/arm/STM32/STM32CubeF4/Projects/STM32F4-Discovery/Templates/SW4STM32/STM32F4-Discovery/STM32F407VGTx_FLASH.ld
 STARTUP=$(CMSISDIR)/Device/ST/STM32F4xx/Source/Templates/gcc/startup_stm32f407xx.s
-#STARTUP=startup_stm32f407xx.s
 SYSTEM=$(CMSISDIR)/Device/ST/STM32F4xx/Source/Templates/system_stm32f4xx.c
 
 CFLAGS=-mthumb -c -o $@ -O3 -D$(STM32MCU) -I$(CMSISDIR)/Device/ST/STM32F4xx/Include -I$(CMSISDIR)/Include
 LDFLAGS=-mthumb --specs=nosys.specs -o $@ -T$(LDSCRIPT)
 OCFLAGS=-R .stack -O binary
 SZFLAGS=-B -d
+INFOFLAGS=--descr
 
 OBJS=blinky.o
 ELFS=$(OBJS:.o=.elf)
@@ -55,5 +55,18 @@ startup_stm32f407xx.o: $(STARTUP)
 prog: blinky.bin
 	$(STFLASH) write blinky.bin 0x8000000
 
+.PHONY: prog
 
+# Target 'teststlink' will connect to the programmer and read the
+# device ID, but not program it
+teststlink:
+	$(STINFO) $(INFOFLAGS)
+
+.PHONY: teststlink
+
+# Target 'clean' will delete all object files, ELF files, and BIN files
+clean:
+	-rm -f $(OBJS) $(ELFS) $(BINS) startup_stm32f407xx.o system_stm32f4xx.o
+
+.PHONY: clean
 
