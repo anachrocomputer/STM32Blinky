@@ -1,22 +1,35 @@
-# Makefile for simple ARM programming
+# Makefile for bare-metal STM32F103 ARM Cortex-M3 programming
 
 # We'll pick up the GCC toolchain from the Arduino installation
-ARDUINO=/home/john/.arduino15/packages
-STLINK_TOOLS=/home/john/Arduino/hardware/Arduino_STM32/tools/linux/stlink
+ifeq ($(OS),Windows_NT)
+ARDUINO=/Users/John.Honniball/AppData/Local/Arduino15
+else
+ARDUINO=/home/john/.arduino15
+endif
 
 # We need CMSIS from the ST repo STM32CubeF1, which is installed locally
-CMSISDIR=/home/john/src/arm/STM32/STM32CubeF1/Drivers/CMSIS
+CMSISDIR=../../STM32CubeF1/Drivers/CMSIS
+
+# ST-LINK is the Open Source tool used to program the STM32
+ifeq ($(OS),Windows_NT)
+STLINK_TOOLS=/home/john/Arduino/hardware/Arduino_STM32/tools/linux/stlink # TODO: change this for Windows
+else
+STLINK_TOOLS=/home/john/Arduino/hardware/Arduino_STM32/tools/linux/stlink
+endif
 
 MCU=cortex-m3
+STM32MCU=STM32F103x6
 
-CC=$(ARDUINO)/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/arm-none-eabi-gcc
-LD=$(ARDUINO)/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/arm-none-eabi-gcc
-OC=$(ARDUINO)/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/arm-none-eabi-objcopy
-SZ=$(ARDUINO)/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin/arm-none-eabi-size
+ARM_TOOLS=$(ARDUINO)/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin
+
+CC=$(ARM_TOOLS)/arm-none-eabi-gcc
+LD=$(ARM_TOOLS)/arm-none-eabi-gcc
+OC=$(ARM_TOOLS)/arm-none-eabi-objcopy
+SZ=$(ARM_TOOLS)/arm-none-eabi-size
+
 STINFO=$(STLINK_TOOLS)/st-info
 STFLASH=$(STLINK_TOOLS)/st-flash
 
-STM32MCU=STM32F103x6
 LDSCRIPT=$(CMSISDIR)/Device/ST/STM32F1xx/Source/Templates/gcc/linker/STM32F103X6_FLASH.ld
 STARTUP=$(CMSISDIR)/Device/ST/STM32F1xx/Source/Templates/gcc/startup_stm32f103x6.s
 SYSTEM=$(CMSISDIR)/Device/ST/STM32F1xx/Source/Templates/system_stm32f1xx.c
