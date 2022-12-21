@@ -66,7 +66,30 @@ static void t1ou2(const int ch)
 
 static void initMCU(void)
 {
-   // TODO: set up all clocks and PLLs
+   FLASH->ACR |= FLASH_ACR_LATENCY_2;  // Set Flash latency
+   
+   RCC->CFGR |= RCC_CFGR_PPRE1_DIV2;   // Set APB1 bus to not exceed 36MHz
+   
+   RCC->CR |= RCC_CR_HSEON;   // Switch on High Speed External clock (8MHz on the Blue Pill)
+   
+   // Wait for HSE to start up
+   while ((RCC->CR & RCC_CR_HSERDY) == 0)
+      ;
+   
+   RCC->CFGR |= RCC_CFGR_PLLSRC;       // Select HSE as input to PLL
+   RCC->CFGR |= RCC_CFGR_PLLMULL9;     // Select multiply-by-9 to go from 8MHz to 72MHz
+   
+   RCC->CR |= RCC_CR_PLLON;            // Switch on PLL
+   
+   // Wait for PLL to start up
+   while ((RCC->CR & RCC_CR_PLLRDY) == 0)
+      ;
+   
+   RCC->CFGR |= RCC_CFGR_SW_PLL;       // Select PLL as system clock (72MHz)
+   
+   // Wait for PLL to select
+   while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL)
+      ;
 }
 
 
@@ -99,11 +122,11 @@ static void initUARTs(void)
    GPIOA->CRH &= ~(GPIO_CRH_MODE10 | GPIO_CRH_CNF10);     // Clear configuration bits for PA10
    GPIOA->CRH |= GPIO_CRH_CNF10_1;                        // Configure PA10 as alternate function, floating input
    
-   // Configure PA2, the GPIO pin with alternative function TxD1
+   // Configure PA2, the GPIO pin with alternative function TxD2
    GPIOA->CRL &= ~(GPIO_CRL_MODE2 | GPIO_CRL_CNF2);       // Clear configuration bits for PA2
    GPIOA->CRL |= (GPIO_CRL_CNF2_1 | GPIO_CRL_MODE2_0 | GPIO_CRL_MODE2_1);   // Configure PA2 as alternate function, push-pull
    
-   // Configure PA3, the GPIO pin with alternative function RxD1
+   // Configure PA3, the GPIO pin with alternative function RxD2
    GPIOA->CRL &= ~(GPIO_CRL_MODE3 | GPIO_CRL_CNF3);       // Clear configuration bits for PA3
    GPIOA->CRL |= GPIO_CRL_CNF3_1;                         // Configure PA3 as alternate function, floating input
    
@@ -116,10 +139,10 @@ static void initUARTs(void)
 
    // Configure UART2 - defaults are 1 start bit, 8 data bits, 1 stop bit, no parity
    // PCLK1 not set up yet, so it doesn't work
-   RCC->APB1ENR |= RCC_APB1ENR_USART2EN;  // Enable USART2 clock
-   USART2->CR1 |= USART_CR1_TE;           // Switch on the UART
-   USART2->BRR |= 0x683;                  // Set for 9600 baud (reference manual page 528)
-   USART2->CR1 |= USART_CR1_TE;           // Enable transmitter (sends a junk character)
+   //RCC->APB1ENR |= RCC_APB1ENR_USART2EN;  // Enable USART2 clock
+   //USART2->CR1 |= USART_CR1_TE;           // Switch on the UART
+   //USART2->BRR |= 0x683;                  // Set for 9600 baud (reference manual page 528)
+   //USART2->CR1 |= USART_CR1_TE;           // Enable transmitter (sends a junk character)
 // USART2->CR1 |= USART_CR1_RE;           // Enable receiver
 }
 
@@ -136,7 +159,7 @@ static void initPWM(void)
 static void initMillisecondTimer(void)
 {
    // Set up timer for regular 1ms interrupt
-   if (SysTick_Config (8000)) { // 8MHz divided by 1000  (SystemCoreClock / 1000)
+   if (SysTick_Config(72000)) { // 72MHz divided by 1000  (SystemCoreClock / 1000)
       while (1)
          ;
    }
@@ -158,18 +181,18 @@ int main(void)
    while (1) {
       GPIOC->BSRR = GPIO_BSRR_BR13; // GPIO pin PC13 LOW, LED on
       
-      for (dally = 0; dally < 400000; dally++)
+      for (dally = 0; dally < 2400000; dally++)
          ;
       
-      t1ou('-');
+      //t1ou('-');
       //t1ou2('A');
       
       GPIOC->BSRR = GPIO_BSRR_BS13; // GPIO pin PC13 HIGH, LED off
       
-      for (dally = 0; dally < 400000; dally++)
+      for (dally = 0; dally < 2400000; dally++)
          ;
       
-      t1ou('*');
+      //t1ou('*');
       //t1ou2('B');
    }
 }
