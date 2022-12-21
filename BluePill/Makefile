@@ -12,7 +12,7 @@ CMSISDIR=../../STM32CubeF1/Drivers/CMSIS
 
 # ST-LINK is the Open Source tool used to program the STM32
 ifeq ($(OS),Windows_NT)
-STLINK_TOOLS=/home/john/Arduino/hardware/Arduino_STM32/tools/linux/stlink # TODO: change this for Windows
+STLINK_TOOLS=/Users/John.Honniball/Documents/bin/stlink-1.7.0-x86_64-w64-mingw32/bin
 else
 STLINK_TOOLS=/home/john/Arduino/hardware/Arduino_STM32/tools/linux/stlink
 endif
