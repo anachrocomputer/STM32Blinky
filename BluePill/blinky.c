@@ -2,6 +2,7 @@
 
 #include <stm32f1xx.h>
 
+#include <stdio.h>
 #include <stdint.h>
 
 
@@ -59,6 +60,23 @@ static void t1ou2(const int ch)
   
    // Send byte
    USART2->DR = ch;
+}
+
+
+/* _write --- connect stdio functions to UART1 */
+
+int _write(const int fd, const char *ptr, const int len)
+{
+   int i;
+
+   for (i = 0; i < len; i++) {
+      if (*ptr == '\n')
+         t1ou('\r');
+      
+      t1ou(*ptr++);
+   }
+  
+   return (len);
 }
 
 
@@ -170,6 +188,7 @@ static void initMillisecondTimer(void)
 int main(void)
 {
    volatile int dally;
+   unsigned long int *id = (unsigned long int *)0x1FFFF7E8;
    
    initMCU();
    initGPIOs();
@@ -179,11 +198,12 @@ int main(void)
    
    __enable_irq();   // Enable all interrupts
    
-   t1ou('S');
-   t1ou('T');
-   t1ou('M');
-   t1ou('3');
-   t1ou('2');
+   printf("\nSTM%dF%d\n", 32, 103);
+   
+   printf("%08x %08x %08x\n", id[0], id[1], id[2]);
+   
+   printf("r%dp%d\n", ((SCB->CPUID >> 20) & 0x0F), (SCB->CPUID & 0x0F));
+   printf("%08x %08x\n", SCB->CPUID, DBGMCU->IDCODE);
    
    while (1) {
       GPIOC->BSRR = GPIO_BSRR_BR13; // GPIO pin PC13 LOW, LED on
