@@ -63,6 +63,19 @@ static void t1ou2(const int ch)
 }
 
 
+/* t1ou3 --- send a single character on UART3 by polling */
+
+static void t1ou3(const int ch)
+{
+   // Wait for TX empty
+   while ((USART3->SR & USART_SR_TXE) == 0)
+      ;
+  
+   // Send byte
+   USART3->DR = ch;
+}
+
+
 /* _write --- connect stdio functions to UART1 */
 
 int _write(const int fd, const char *ptr, const int len)
@@ -133,8 +146,10 @@ static void initGPIOs(void)
 static void initUARTs(void)
 {
    RCC->APB2ENR |= RCC_APB2ENR_IOPAEN;                    // Enable clock to GPIO A peripherals on APB2 bus
+   RCC->APB2ENR |= RCC_APB2ENR_IOPBEN;                    // Enable clock to GPIO B peripherals on APB2 bus
    RCC->APB2ENR |= RCC_APB2ENR_USART1EN;                  // Enable USART1 clock
    RCC->APB1ENR |= RCC_APB1ENR_USART2EN;                  // Enable USART2 clock
+   RCC->APB1ENR |= RCC_APB1ENR_USART3EN;                  // Enable USART3 clock
    
    // Configure PA9, the GPIO pin with alternative function TxD1
    GPIOA->CRH &= ~(GPIO_CRH_MODE9 | GPIO_CRH_CNF9);       // Clear configuration bits for PA9
@@ -152,6 +167,14 @@ static void initUARTs(void)
    GPIOA->CRL &= ~(GPIO_CRL_MODE3 | GPIO_CRL_CNF3);       // Clear configuration bits for PA3
    GPIOA->CRL |= GPIO_CRL_CNF3_1;                         // Configure PA3 as alternate function, floating input
    
+   // Configure PB10, the GPIO pin with alternative function TxD3
+   GPIOB->CRH &= ~(GPIO_CRH_MODE10 | GPIO_CRH_CNF10);     // Clear configuration bits for PB10
+   GPIOB->CRH |= GPIO_CRH_CNF10_1 | GPIO_CRH_MODE10_0 | GPIO_CRH_MODE10_1;  // Configure PB10 as alternate function, push-pull
+   
+   // Configure PB11, the GPIO pin with alternative function RxD3
+   GPIOB->CRH &= ~(GPIO_CRH_MODE11 | GPIO_CRH_CNF11);     // Clear configuration bits for PB11
+   GPIOB->CRH |= GPIO_CRH_CNF11_1;                        // Configure PB11 as alternate function, floating input
+   
    // Configure UART1 - defaults are 1 start bit, 8 data bits, 1 stop bit, no parity
    USART1->CR1 |= USART_CR1_UE;           // Switch on the UART
    USART1->BRR |= (467<<4) | 12;          // Set for 9600 baud (reference manual page 799) 72000000 / (16 * 9600)
@@ -163,6 +186,12 @@ static void initUARTs(void)
    USART2->BRR |= (234<<4) | 6;           // Set for 9600 baud (reference manual page 799) 36000000 / (16 * 9600)
    USART2->CR1 |= USART_CR1_TE;           // Enable transmitter (sends a junk character)
 // USART2->CR1 |= USART_CR1_RE;           // Enable receiver
+
+// Configure UART3 - defaults are 1 start bit, 8 data bits, 1 stop bit, no parity
+   USART3->CR1 |= USART_CR1_UE;           // Switch on the UART
+   USART3->BRR |= (234<<4) | 6;           // Set for 9600 baud (reference manual page 799) 36000000 / (16 * 9600)
+   USART3->CR1 |= USART_CR1_TE;           // Enable transmitter (sends a junk character)
+// USART3->CR1 |= USART_CR1_RE;           // Enable receiver
 }
 
 
@@ -213,6 +242,7 @@ int main(void)
       
       t1ou('-');
       t1ou2('A');
+      t1ou3('X');
       
       GPIOC->BSRR = GPIO_BSRR_BS13; // GPIO pin PC13 HIGH, LED off
       
@@ -221,6 +251,7 @@ int main(void)
       
       t1ou('*');
       t1ou2('B');
+      t1ou3('Y');
    }
 }
 

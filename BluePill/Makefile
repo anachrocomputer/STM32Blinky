@@ -18,7 +18,7 @@ STLINK_TOOLS=/home/john/Arduino/hardware/Arduino_STM32/tools/linux/stlink
 endif
 
 MCU=cortex-m3
-STM32MCU=STM32F103x6
+STM32MCU=STM32F103xB
 
 ARM_TOOLS=$(ARDUINO)/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin
 
@@ -30,8 +30,8 @@ SZ=$(ARM_TOOLS)/arm-none-eabi-size
 STINFO=$(STLINK_TOOLS)/st-info
 STFLASH=$(STLINK_TOOLS)/st-flash
 
-LDSCRIPT=$(CMSISDIR)/Device/ST/STM32F1xx/Source/Templates/gcc/linker/STM32F103X6_FLASH.ld
-STARTUP=$(CMSISDIR)/Device/ST/STM32F1xx/Source/Templates/gcc/startup_stm32f103x6.s
+LDSCRIPT=$(CMSISDIR)/Device/ST/STM32F1xx/Source/Templates/gcc/linker/STM32F103XB_FLASH.ld
+STARTUP=$(CMSISDIR)/Device/ST/STM32F1xx/Source/Templates/gcc/startup_stm32f103xb.s
 SYSTEM=$(CMSISDIR)/Device/ST/STM32F1xx/Source/Templates/system_stm32f1xx.c
 
 CFLAGS=-mthumb -c -o $@ -O3 -D$(STM32MCU) -I$(CMSISDIR)/Device/ST/STM32F1xx/Include -I$(CMSISDIR)/Include
@@ -51,8 +51,8 @@ all: $(BINS)
 blinky.bin: blinky.elf
 	$(OC) $(OCFLAGS) blinky.elf blinky.bin
 
-blinky.elf: blinky.o startup_stm32f103x6.o system_stm32f1xx.o
-	$(LD) -mcpu=$(MCU) $(LDFLAGS) startup_stm32f103x6.o system_stm32f1xx.o blinky.o
+blinky.elf: blinky.o startup_stm32f103xb.o system_stm32f1xx.o
+	$(LD) -mcpu=$(MCU) $(LDFLAGS) startup_stm32f103xb.o system_stm32f1xx.o blinky.o
 	$(SZ) $(SZFLAGS) blinky.elf
 	
 blinky.o: blinky.c
@@ -61,7 +61,7 @@ blinky.o: blinky.c
 system_stm32f1xx.o: $(SYSTEM)
 	$(CC) -mcpu=$(MCU) $(CFLAGS) $(SYSTEM)
 
-startup_stm32f103x6.o: $(STARTUP)
+startup_stm32f103xb.o: $(STARTUP)
 	$(CC) -mcpu=$(MCU) $(CFLAGS) $(STARTUP)
 
 # Target to invoke the programmer and program the flash memory of the MCU
@@ -79,7 +79,7 @@ teststlink:
 
 # Target 'clean' will delete all object files, ELF files, and BIN files
 clean:
-	-rm -f $(OBJS) $(ELFS) $(BINS) startup_stm32f103x6.o system_stm32f1xx.o
+	-rm -f $(OBJS) $(ELFS) $(BINS) startup_stm32f103xb.o system_stm32f1xx.o
 
 .PHONY: clean
 
