@@ -94,6 +94,63 @@ int _write(const int fd, const char *ptr, const int len)
 }
 
 
+/* setRGBLed --- control two RGB LEDs connected to PORT B and PWM */
+
+void setRGBLed(const int state, const uint8_t fade)
+{
+   switch (state) {
+   case 0:                    // Red fading up, blue on
+      TIM3->CCR1 = fade;
+      TIM3->CCR2 = 0;
+      TIM3->CCR3 = 255;
+      GPIOB->BSRR = GPIO_BSRR_BS12; // GPIO pin PB12 HIGH, red LED on
+      GPIOB->BSRR = GPIO_BSRR_BR13; // GPIO pin PB13 LOW, green LED off
+      GPIOB->BSRR = GPIO_BSRR_BR14; // GPIO pin PB14 LOW, blue LED off
+      break;
+   case 1:                    // Red on, blue fading down
+      TIM3->CCR1 = 255;
+      TIM3->CCR2 = 0;
+      TIM3->CCR3 = 255 - fade;
+      GPIOB->BSRR = GPIO_BSRR_BS12; // GPIO pin PB12 HIGH, red LED on
+      GPIOB->BSRR = GPIO_BSRR_BS13; // GPIO pin PB13 HIGH, green LED on
+      GPIOB->BSRR = GPIO_BSRR_BR14; // GPIO pin PB14 LOW, blue LED off
+      break;
+   case 2:                    // Red on, green fading up
+      TIM3->CCR1 = 255;
+      TIM3->CCR2 = fade;
+      TIM3->CCR3 = 0;
+      GPIOB->BSRR = GPIO_BSRR_BR12; // GPIO pin PB12 LOW, red LED off
+      GPIOB->BSRR = GPIO_BSRR_BS13; // GPIO pin PB13 HIGH, green LED on
+      GPIOB->BSRR = GPIO_BSRR_BR14; // GPIO pin PB14 LOW, blue LED off
+      break;
+   case 3:                    // Red fading down, green on
+      TIM3->CCR1 = 255 - fade;
+      TIM3->CCR2 = 255;
+      TIM3->CCR3 = 0;
+      GPIOB->BSRR = GPIO_BSRR_BR12; // GPIO pin PB12 LOW, red LED off
+      GPIOB->BSRR = GPIO_BSRR_BS13; // GPIO pin PB13 HIGH, green LED on
+      GPIOB->BSRR = GPIO_BSRR_BS14; // GPIO pin PB14 HIGH, blue LED on
+      break;
+   case 4:                    // Green on, blue fading up
+      TIM3->CCR1 = 0;
+      TIM3->CCR2 = 255;
+      TIM3->CCR3 = fade;
+      GPIOB->BSRR = GPIO_BSRR_BR12; // GPIO pin PB12 LOW, red LED off
+      GPIOB->BSRR = GPIO_BSRR_BR13; // GPIO pin PB13 LOW, green LED off
+      GPIOB->BSRR = GPIO_BSRR_BS14; // GPIO pin PB14 HIGH, blue LED on
+      break;
+   case 5:                    // Green fading down, blue on
+      TIM3->CCR1 = 0;
+      TIM3->CCR2 = 255 - fade;
+      TIM3->CCR3 = 255;
+      GPIOB->BSRR = GPIO_BSRR_BS12; // GPIO pin PB12 HIGH, red LED on
+      GPIOB->BSRR = GPIO_BSRR_BR13; // GPIO pin PB13 LOW, green LED off
+      GPIOB->BSRR = GPIO_BSRR_BS14; // GPIO pin PB14 HIGH, blue LED on
+      break;
+   }
+}
+
+
 /* printDeviceID --- print the Device ID bytes as read from SCB and DBGMCU */
 
 void printDeviceID(void)
@@ -211,7 +268,20 @@ static void initMCU(void)
 static void initGPIOs(void)
 {
    // Configure Reset and Clock Control
+   RCC->APB2ENR |= RCC_APB2ENR_IOPBEN;                    // Enable clock to GPIO B peripherals on APB2 bus
    RCC->APB2ENR |= RCC_APB2ENR_IOPCEN;                    // Enable clock to GPIO C peripherals on APB2 bus
+   
+   // Configure PB12, the GPIO pin with the red LED
+   GPIOB->CRH &= ~(GPIO_CRH_MODE12 | GPIO_CRH_CNF12);     // Set PB12 to push-pull output mode
+   GPIOB->CRH |= (GPIO_CRH_MODE12_0 | GPIO_CRH_MODE12_1); // Configure PB12 as output, 50MHz
+   
+   // Configure PB13, the GPIO pin with the green LED
+   GPIOB->CRH &= ~(GPIO_CRH_MODE13 | GPIO_CRH_CNF13);     // Set PB13 to push-pull output mode
+   GPIOB->CRH |= (GPIO_CRH_MODE13_0 | GPIO_CRH_MODE13_1); // Configure PB13 as output, 50MHz
+   
+   // Configure PB14, the GPIO pin with the blue LED
+   GPIOB->CRH &= ~(GPIO_CRH_MODE14 | GPIO_CRH_CNF14);     // Set PB14 to push-pull output mode
+   GPIOB->CRH |= (GPIO_CRH_MODE14_0 | GPIO_CRH_MODE14_1); // Configure PB14 as output, 50MHz
    
    // Configure PC13, the GPIO pin with the LED
    GPIOC->CRH &= ~(GPIO_CRH_MODE13 | GPIO_CRH_CNF13);     // Set PC13 to push-pull output mode
@@ -281,6 +351,38 @@ static void initUARTs(void)
 
 static void initPWM(void)
 {
+   // Configure Reset and Clock Control
+   RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;                    // Enable clock to TIM3 peripheral on APB1 bus
+   RCC->APB2ENR |= RCC_APB2ENR_IOPAEN;                    // Enable clock to GPIO A peripherals on APB2 bus
+   RCC->APB2ENR |= RCC_APB2ENR_IOPBEN;                    // Enable clock to GPIO B peripherals on APB2 bus
+   
+   // Configure PA6, the GPIO pin with alternative function T3C1
+   GPIOA->CRL &= ~(GPIO_CRL_MODE6 | GPIO_CRL_CNF6);       // Clear configuration bits for PA6
+   GPIOA->CRL |= GPIO_CRL_CNF6_1 | GPIO_CRL_MODE6_0 | GPIO_CRL_MODE6_1;     // Configure PA6 as alternate function, push-pull
+   
+   // Configure PA7, the GPIO pin with alternative function T3C2
+   GPIOA->CRL &= ~(GPIO_CRL_MODE7 | GPIO_CRL_CNF7);       // Clear configuration bits for PA7
+   GPIOA->CRL |= GPIO_CRL_CNF7_1 | GPIO_CRL_MODE7_0 | GPIO_CRL_MODE7_1;     // Configure PA6 as alternate function, push-pull
+   
+   // Configure PB0, the GPIO pin with alternative function T3C3
+   GPIOB->CRL &= ~(GPIO_CRL_MODE0 | GPIO_CRL_CNF0);       // Clear configuration bits for PB0
+   GPIOB->CRL |= GPIO_CRL_CNF0_1 | GPIO_CRL_MODE0_0 | GPIO_CRL_MODE0_1;     // Configure PB0 as alternate function, push-pull
+   
+   // Don't configure PB1, the GPIO pin with alternative function T3C4, not needed
+   
+   // Configure Timer 3 for triple PWM generation
+   TIM3->CCMR1 =  TIM_CCMR1_OC1PE | TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1; // Timer output compare mode PWM for T3C1
+   TIM3->CCMR1 |= TIM_CCMR1_OC2PE | TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1; // Timer output compare mode PWM for T3C2
+   TIM3->CCMR2 |= TIM_CCMR2_OC3PE | TIM_CCMR2_OC3M_2 | TIM_CCMR2_OC3M_1; // Timer output compare mode PWM for T3C3
+   TIM3->CR1 |= TIM_CR1_CEN | TIM_CR1_ARPE; // Enable counter, auto-reload to 0 at the end of a count
+   TIM3->ARR = 0xFF;              // Auto-Reload Register: count to 255 (no point counting higher)
+   TIM3->CCR1 = 0;                // Set T3C1 PWM to zero (0% duty cycle)
+   TIM3->CCR2 = 0;                // Set T3C2 PWM to zero (0% duty cycle)
+   TIM3->CCR3 = 0;                // Set T3C3 PWM to zero (0% duty cycle)
+   TIM3->EGR |= TIM_EGR_UG;       // Event Generation Register: update generation ON
+   TIM3->CCER |= TIM_CCER_CC1E;   // Output T3C1 enabled
+   TIM3->CCER |= TIM_CCER_CC2E;   // Output T3C2 enabled
+   TIM3->CCER |= TIM_CCER_CC3E;   // Output T3C3 enabled
 }
 
 
@@ -298,7 +400,10 @@ static void initMillisecondTimer(void)
 
 int main(void)
 {
-   volatile int dally;
+   int ledState = 0;
+   uint8_t fade = 0;
+   uint32_t end;
+   uint8_t flag = 0;
    
    initMCU();
    initGPIOs();
@@ -313,24 +418,75 @@ int main(void)
    printDeviceID();
    printSerialNumber();
    
+   end = millis() + 500u;
+   
    while (1) {
-      GPIOC->BSRR = GPIO_BSRR_BR13; // GPIO pin PC13 LOW, LED on
+      if (Tick) {
+         if (fade == 255) {
+            fade = 0;
+
+            if (ledState == 5)
+               ledState = 0;
+            else
+               ledState++;
+         }
+         else
+            fade++;
+            
+         setRGBLed(ledState, fade);
+         
+         if (millis() >= end) {
+            end = millis() + 500u;
+            
+            if (flag) {
+               GPIOC->BSRR = GPIO_BSRR_BR13; // GPIO pin PC13 LOW, LED on
+               
+               t1ou2('A');
+               t1ou3('X');
+            }
+            else {
+               GPIOC->BSRR = GPIO_BSRR_BS13; // GPIO pin PC13 HIGH, LED off
+               
+               t1ou2('B');
+               t1ou3('Y');
+            }
+            
+            flag = !flag;
+            
+            //UART1TxByte('U');
+            //UART1TxByte('1');
+            //UART1TxByte(' ');
+            //UART1TxByte('4');
+            //UART1TxByte('8');
+            //UART1TxByte('0');
+            //UART1TxByte('9');
+            //UART1TxByte(' ');
+
+            //UART2TxByte('U');
+            //UART2TxByte('2');
+            //UART2TxByte(' ');
+            //UART2TxByte('4');
+            //UART2TxByte('8');
+            //UART2TxByte('0');
+            //UART2TxByte('9');
+            //UART2TxByte(' ');
+
+            //UART3TxByte('U');
+            //UART3TxByte('3');
+            //UART3TxByte(' ');
+            //UART3TxByte('4');
+            //UART3TxByte('8');
+            //UART3TxByte('0');
+            //UART3TxByte('9');
+            //UART3TxByte(' ');
+            
+            printf("millis() = %ld\n", millis());
+         }
+         
+         Tick = 0;
+      }
       
-      for (dally = 0; dally < 2400000; dally++)
-         ;
-      
-      t1ou('-');
-      t1ou2('A');
-      t1ou3('X');
-      
-      GPIOC->BSRR = GPIO_BSRR_BS13; // GPIO pin PC13 HIGH, LED off
-      
-      for (dally = 0; dally < 2400000; dally++)
-         ;
-      
-      t1ou('*');
-      t1ou2('B');
-      t1ou3('Y');
+      // Poll for input here
    }
 }
 
