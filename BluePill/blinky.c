@@ -66,8 +66,91 @@ void USART1_IRQHandler(void)
       }
    }
    
-   // Check Tx interrupt here
    if (USART1->SR & USART_SR_TXE) {
+      if (U1Buf.tx.head != U1Buf.tx.tail) // Is there anything to send?
+      {
+         const uint8_t tmptail = (U1Buf.tx.tail + 1) & UART_TX_BUFFER_MASK;
+         
+         U1Buf.tx.tail = tmptail;
+
+         USART1->DR = U1Buf.tx.buf[tmptail];    // Transmit one byte
+      }
+      else
+      {
+         USART1->CR1 &= ~USART_CR1_TXEIE; // Nothing left to send; disable Tx Empty interrupt
+      }
+   }
+}
+
+
+/* USART2_IRQHandler --- ISR for USART2, used for Rx and Tx */
+
+void USART2_IRQHandler(void)
+{
+   if (USART2->SR & USART_SR_RXNE) {
+      const uint8_t tmphead = (U2Buf.rx.head + 1) & UART_RX_BUFFER_MASK;
+      const uint8_t ch = USART2->DR;  // Read received byte from UART
+      
+      if (tmphead == U2Buf.rx.tail)   // Is receive buffer full?
+      {
+          // Buffer is full; discard new byte
+      }
+      else
+      {
+         U2Buf.rx.head = tmphead;
+         U2Buf.rx.buf[tmphead] = ch;   // Store byte in buffer
+      }
+   }
+   
+   if (USART2->SR & USART_SR_TXE) {
+      if (U2Buf.tx.head != U2Buf.tx.tail) // Is there anything to send?
+      {
+         const uint8_t tmptail = (U2Buf.tx.tail + 1) & UART_TX_BUFFER_MASK;
+         
+         U2Buf.tx.tail = tmptail;
+
+         USART2->DR = U2Buf.tx.buf[tmptail];    // Transmit one byte
+      }
+      else
+      {
+         USART2->CR1 &= ~USART_CR1_TXEIE; // Nothing left to send; disable Tx Empty interrupt
+      }
+   }
+}
+
+
+/* USART3_IRQHandler --- ISR for USART3, used for Rx and Tx */
+
+void USART3_IRQHandler(void)
+{
+   if (USART3->SR & USART_SR_RXNE) {
+      const uint8_t tmphead = (U3Buf.rx.head + 1) & UART_RX_BUFFER_MASK;
+      const uint8_t ch = USART3->DR;  // Read received byte from UART
+      
+      if (tmphead == U3Buf.rx.tail)   // Is receive buffer full?
+      {
+          // Buffer is full; discard new byte
+      }
+      else
+      {
+         U3Buf.rx.head = tmphead;
+         U3Buf.rx.buf[tmphead] = ch;   // Store byte in buffer
+      }
+   }
+   
+   if (USART3->SR & USART_SR_TXE) {
+      if (U3Buf.tx.head != U3Buf.tx.tail) // Is there anything to send?
+      {
+         const uint8_t tmptail = (U3Buf.tx.tail + 1) & UART_TX_BUFFER_MASK;
+         
+         U3Buf.tx.tail = tmptail;
+
+         USART3->DR = U3Buf.tx.buf[tmptail];    // Transmit one byte
+      }
+      else
+      {
+         USART3->CR1 &= ~USART_CR1_TXEIE; // Nothing left to send; disable Tx Empty interrupt
+      }
    }
 }
 
@@ -99,45 +182,6 @@ void SysTick_Handler(void)
 }
 
 
-/* t1ou --- send a single character on UART1 by polling */
-
-static void t1ou(const int ch)
-{
-   // Wait for TX empty
-   while ((USART1->SR & USART_SR_TXE) == 0)
-      ;
-  
-   // Send byte
-   USART1->DR = ch;
-}
-
-
-/* t1ou2 --- send a single character on UART2 by polling */
-
-static void t1ou2(const int ch)
-{
-   // Wait for TX empty
-   while ((USART2->SR & USART_SR_TXE) == 0)
-      ;
-  
-   // Send byte
-   USART2->DR = ch;
-}
-
-
-/* t1ou3 --- send a single character on UART3 by polling */
-
-static void t1ou3(const int ch)
-{
-   // Wait for TX empty
-   while ((USART3->SR & USART_SR_TXE) == 0)
-      ;
-  
-   // Send byte
-   USART3->DR = ch;
-}
-
-
 /* UART1RxByte --- read one character from UART1 via the circular buffer */
 
 uint8_t UART1RxByte(void)
@@ -161,6 +205,54 @@ int UART1RxAvailable(void)
 }
 
 
+/* UART1TxByte --- send one character to UART1 via the circular buffer */
+
+void UART1TxByte(const uint8_t data)
+{
+   const uint8_t tmphead = (U1Buf.tx.head + 1) & UART_TX_BUFFER_MASK;
+   
+   while (tmphead == U1Buf.tx.tail)   // Wait, if buffer is full
+       ;
+
+   U1Buf.tx.buf[tmphead] = data;
+   U1Buf.tx.head = tmphead;
+
+   USART1->CR1 |= USART_CR1_TXEIE;   // Enable UART1 Tx Empty interrupt
+}
+
+
+/* UART2TxByte --- send one character to UART2 via the circular buffer */
+
+void UART2TxByte(const uint8_t data)
+{
+   const uint8_t tmphead = (U2Buf.tx.head + 1) & UART_TX_BUFFER_MASK;
+   
+   while (tmphead == U2Buf.tx.tail)   // Wait, if buffer is full
+       ;
+
+   U2Buf.tx.buf[tmphead] = data;
+   U2Buf.tx.head = tmphead;
+
+   USART2->CR1 |= USART_CR1_TXEIE;   // Enable UART2 Tx Empty interrupt
+}
+
+
+/* UART3TxByte --- send one character to UART3 via the circular buffer */
+
+void UART3TxByte(const uint8_t data)
+{
+   const uint8_t tmphead = (U3Buf.tx.head + 1) & UART_TX_BUFFER_MASK;
+   
+   while (tmphead == U3Buf.tx.tail)   // Wait, if buffer is full
+       ;
+
+   U3Buf.tx.buf[tmphead] = data;
+   U3Buf.tx.head = tmphead;
+
+   USART3->CR1 |= USART_CR1_TXEIE;   // Enable UART3 Tx Empty interrupt
+}
+
+
 /* _write --- connect stdio functions to UART1 */
 
 int _write(const int fd, const char *ptr, const int len)
@@ -169,9 +261,9 @@ int _write(const int fd, const char *ptr, const int len)
 
    for (i = 0; i < len; i++) {
       if (*ptr == '\n')
-         t1ou('\r');
+         UART1TxByte('\r');
       
-      t1ou(*ptr++);
+      UART1TxByte(*ptr++);
    }
   
    return (len);
@@ -387,6 +479,12 @@ static void initUARTs(void)
    RCC->APB1ENR |= RCC_APB1ENR_USART2EN;                  // Enable USART2 clock
    RCC->APB1ENR |= RCC_APB1ENR_USART3EN;                  // Enable USART3 clock
    
+   // Set up UART1 and associated circular buffers
+   U1Buf.tx.head = 0;
+   U1Buf.tx.tail = 0;
+   U1Buf.rx.head = 0;
+   U1Buf.rx.tail = 0;
+   
    // Configure PA9, the GPIO pin with alternative function TxD1
    GPIOA->CRH &= ~(GPIO_CRH_MODE9 | GPIO_CRH_CNF9);       // Clear configuration bits for PA9
    GPIOA->CRH |= GPIO_CRH_CNF9_1 | GPIO_CRH_MODE9_0 | GPIO_CRH_MODE9_1;     // Configure PA9 as alternate function, push-pull
@@ -394,22 +492,6 @@ static void initUARTs(void)
    // Configure PA10, the GPIO pin with alternative function RxD1
    GPIOA->CRH &= ~(GPIO_CRH_MODE10 | GPIO_CRH_CNF10);     // Clear configuration bits for PA10
    GPIOA->CRH |= GPIO_CRH_CNF10_1;                        // Configure PA10 as alternate function, floating input
-   
-   // Configure PA2, the GPIO pin with alternative function TxD2
-   GPIOA->CRL &= ~(GPIO_CRL_MODE2 | GPIO_CRL_CNF2);       // Clear configuration bits for PA2
-   GPIOA->CRL |= GPIO_CRL_CNF2_1 | GPIO_CRL_MODE2_0 | GPIO_CRL_MODE2_1;     // Configure PA2 as alternate function, push-pull
-   
-   // Configure PA3, the GPIO pin with alternative function RxD2
-   GPIOA->CRL &= ~(GPIO_CRL_MODE3 | GPIO_CRL_CNF3);       // Clear configuration bits for PA3
-   GPIOA->CRL |= GPIO_CRL_CNF3_1;                         // Configure PA3 as alternate function, floating input
-   
-   // Configure PB10, the GPIO pin with alternative function TxD3
-   GPIOB->CRH &= ~(GPIO_CRH_MODE10 | GPIO_CRH_CNF10);     // Clear configuration bits for PB10
-   GPIOB->CRH |= GPIO_CRH_CNF10_1 | GPIO_CRH_MODE10_0 | GPIO_CRH_MODE10_1;  // Configure PB10 as alternate function, push-pull
-   
-   // Configure PB11, the GPIO pin with alternative function RxD3
-   GPIOB->CRH &= ~(GPIO_CRH_MODE11 | GPIO_CRH_CNF11);     // Clear configuration bits for PB11
-   GPIOB->CRH |= GPIO_CRH_CNF11_1;                        // Configure PB11 as alternate function, floating input
    
    // Configure UART1 - defaults are 1 start bit, 8 data bits, 1 stop bit, no parity
    USART1->CR1 |= USART_CR1_UE;           // Switch on the UART
@@ -420,17 +502,51 @@ static void initUARTs(void)
    
    NVIC_EnableIRQ(USART1_IRQn);
    
+   // Set up UART2 and associated circular buffers
+   U2Buf.tx.head = 0;
+   U2Buf.tx.tail = 0;
+   U2Buf.rx.head = 0;
+   U2Buf.rx.tail = 0;
+   
+   // Configure PA2, the GPIO pin with alternative function TxD2
+   GPIOA->CRL &= ~(GPIO_CRL_MODE2 | GPIO_CRL_CNF2);       // Clear configuration bits for PA2
+   GPIOA->CRL |= GPIO_CRL_CNF2_1 | GPIO_CRL_MODE2_0 | GPIO_CRL_MODE2_1;     // Configure PA2 as alternate function, push-pull
+   
+   // Configure PA3, the GPIO pin with alternative function RxD2
+   GPIOA->CRL &= ~(GPIO_CRL_MODE3 | GPIO_CRL_CNF3);       // Clear configuration bits for PA3
+   GPIOA->CRL |= GPIO_CRL_CNF3_1;                         // Configure PA3 as alternate function, floating input
+   
    // Configure UART2 - defaults are 1 start bit, 8 data bits, 1 stop bit, no parity
    USART2->CR1 |= USART_CR1_UE;           // Switch on the UART
    USART2->BRR |= (234<<4) | 6;           // Set for 9600 baud (reference manual page 799) 36000000 / (16 * 9600)
+   USART2->CR1 |= USART_CR1_RXNEIE;       // Enable Rx Not Empty interrupt
    USART2->CR1 |= USART_CR1_TE;           // Enable transmitter (sends a junk character)
-// USART2->CR1 |= USART_CR1_RE;           // Enable receiver
+   USART2->CR1 |= USART_CR1_RE;           // Enable receiver
 
+   NVIC_EnableIRQ(USART2_IRQn);
+   
+   // Set up UART3 and associated circular buffers
+   U3Buf.tx.head = 0;
+   U3Buf.tx.tail = 0;
+   U3Buf.rx.head = 0;
+   U3Buf.rx.tail = 0;
+   
+   // Configure PB10, the GPIO pin with alternative function TxD3
+   GPIOB->CRH &= ~(GPIO_CRH_MODE10 | GPIO_CRH_CNF10);     // Clear configuration bits for PB10
+   GPIOB->CRH |= GPIO_CRH_CNF10_1 | GPIO_CRH_MODE10_0 | GPIO_CRH_MODE10_1;  // Configure PB10 as alternate function, push-pull
+   
+   // Configure PB11, the GPIO pin with alternative function RxD3
+   GPIOB->CRH &= ~(GPIO_CRH_MODE11 | GPIO_CRH_CNF11);     // Clear configuration bits for PB11
+   GPIOB->CRH |= GPIO_CRH_CNF11_1;                        // Configure PB11 as alternate function, floating input
+   
 // Configure UART3 - defaults are 1 start bit, 8 data bits, 1 stop bit, no parity
    USART3->CR1 |= USART_CR1_UE;           // Switch on the UART
    USART3->BRR |= (234<<4) | 6;           // Set for 9600 baud (reference manual page 799) 36000000 / (16 * 9600)
+   USART3->CR1 |= USART_CR1_RXNEIE;       // Enable Rx Not Empty interrupt
    USART3->CR1 |= USART_CR1_TE;           // Enable transmitter (sends a junk character)
-// USART3->CR1 |= USART_CR1_RE;           // Enable receiver
+   USART3->CR1 |= USART_CR1_RE;           // Enable receiver
+   
+   NVIC_EnableIRQ(USART3_IRQn);
 }
 
 
@@ -527,45 +643,32 @@ int main(void)
             
             if (flag) {
                GPIOC->BSRR = GPIO_BSRR_BR13; // GPIO pin PC13 LOW, LED on
-               
-               t1ou2('A');
-               t1ou3('X');
             }
             else {
                GPIOC->BSRR = GPIO_BSRR_BS13; // GPIO pin PC13 HIGH, LED off
-               
-               t1ou2('B');
-               t1ou3('Y');
             }
             
             flag = !flag;
             
-            //UART1TxByte('U');
-            //UART1TxByte('1');
-            //UART1TxByte(' ');
-            //UART1TxByte('4');
-            //UART1TxByte('8');
-            //UART1TxByte('0');
-            //UART1TxByte('9');
-            //UART1TxByte(' ');
+            UART2TxByte('U');
+            UART2TxByte('2');
+            UART2TxByte(' ');
+            UART2TxByte('S');
+            UART2TxByte('T');
+            UART2TxByte('M');
+            UART2TxByte('3');
+            UART2TxByte('2');
+            UART2TxByte(' ');
 
-            //UART2TxByte('U');
-            //UART2TxByte('2');
-            //UART2TxByte(' ');
-            //UART2TxByte('4');
-            //UART2TxByte('8');
-            //UART2TxByte('0');
-            //UART2TxByte('9');
-            //UART2TxByte(' ');
-
-            //UART3TxByte('U');
-            //UART3TxByte('3');
-            //UART3TxByte(' ');
-            //UART3TxByte('4');
-            //UART3TxByte('8');
-            //UART3TxByte('0');
-            //UART3TxByte('9');
-            //UART3TxByte(' ');
+            UART3TxByte('U');
+            UART3TxByte('3');
+            UART3TxByte(' ');
+            UART3TxByte('S');
+            UART3TxByte('T');
+            UART3TxByte('M');
+            UART3TxByte('3');
+            UART3TxByte('2');
+            UART3TxByte(' ');
             
             printf("millis() = %ld\n", millis());
          }
