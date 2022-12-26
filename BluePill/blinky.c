@@ -5,10 +5,71 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#define UART_RX_BUFFER_SIZE  (128)
+#define UART_RX_BUFFER_MASK (UART_RX_BUFFER_SIZE - 1)
+#if (UART_RX_BUFFER_SIZE & UART_RX_BUFFER_MASK) != 0
+#error UART_RX_BUFFER_SIZE must be a power of two and <= 256
+#endif
+
+#define UART_TX_BUFFER_SIZE  (128)
+#define UART_TX_BUFFER_MASK (UART_TX_BUFFER_SIZE - 1)
+#if (UART_TX_BUFFER_SIZE & UART_TX_BUFFER_MASK) != 0
+#error UART_TX_BUFFER_SIZE must be a power of two and <= 256
+#endif
+
+struct UART_RX_BUFFER
+{
+    volatile uint8_t head;
+    volatile uint8_t tail;
+    uint8_t buf[UART_RX_BUFFER_SIZE];
+};
+
+struct UART_TX_BUFFER
+{
+    volatile uint8_t head;
+    volatile uint8_t tail;
+    uint8_t buf[UART_TX_BUFFER_SIZE];
+};
+
+struct UART_BUFFER
+{
+    struct UART_TX_BUFFER tx;
+    struct UART_RX_BUFFER rx;
+};
+
+// UART buffers
+struct UART_BUFFER U1Buf;
+struct UART_BUFFER U2Buf;
+struct UART_BUFFER U3Buf;
 
 uint32_t SavedRccCsr = 0u;
 volatile uint32_t Milliseconds = 0;
 volatile uint8_t Tick = 0;
+
+
+/* USART1_IRQHandler --- ISR for USART1, used for Rx and Tx */
+
+void USART1_IRQHandler(void)
+{
+   if (USART1->SR & USART_SR_RXNE) {
+      const uint8_t tmphead = (U1Buf.rx.head + 1) & UART_RX_BUFFER_MASK;
+      const uint8_t ch = USART1->DR;  // Read received byte from UART
+      
+      if (tmphead == U1Buf.rx.tail)   // Is receive buffer full?
+      {
+          // Buffer is full; discard new byte
+      }
+      else
+      {
+         U1Buf.rx.head = tmphead;
+         U1Buf.rx.buf[tmphead] = ch;   // Store byte in buffer
+      }
+   }
+   
+   // Check Tx interrupt here
+   if (USART1->SR & USART_SR_TXE) {
+   }
+}
 
 
 /* millis --- return milliseconds since reset */
@@ -74,6 +135,29 @@ static void t1ou3(const int ch)
   
    // Send byte
    USART3->DR = ch;
+}
+
+
+/* UART1RxByte --- read one character from UART1 via the circular buffer */
+
+uint8_t UART1RxByte(void)
+{
+   const uint8_t tmptail = (U1Buf.rx.tail + 1) & UART_RX_BUFFER_MASK;
+   
+   while (U1Buf.rx.head == U1Buf.rx.tail)  // Wait, if buffer is empty
+       ;
+   
+   U1Buf.rx.tail = tmptail;
+   
+   return (U1Buf.rx.buf[tmptail]);
+}
+
+
+/* UART1RxAvailable --- return true if a byte is available in UART1 circular buffer */
+
+int UART1RxAvailable(void)
+{
+   return (U1Buf.rx.head != U1Buf.rx.tail);
 }
 
 
@@ -330,9 +414,12 @@ static void initUARTs(void)
    // Configure UART1 - defaults are 1 start bit, 8 data bits, 1 stop bit, no parity
    USART1->CR1 |= USART_CR1_UE;           // Switch on the UART
    USART1->BRR |= (467<<4) | 12;          // Set for 9600 baud (reference manual page 799) 72000000 / (16 * 9600)
+   USART1->CR1 |= USART_CR1_RXNEIE;       // Enable Rx Not Empty interrupt
    USART1->CR1 |= USART_CR1_TE;           // Enable transmitter (sends a junk character)
-// USART1->CR1 |= USART_CR1_RE;           // Enable receiver
-
+   USART1->CR1 |= USART_CR1_RE;           // Enable receiver
+   
+   NVIC_EnableIRQ(USART1_IRQn);
+   
    // Configure UART2 - defaults are 1 start bit, 8 data bits, 1 stop bit, no parity
    USART2->CR1 |= USART_CR1_UE;           // Switch on the UART
    USART2->BRR |= (234<<4) | 6;           // Set for 9600 baud (reference manual page 799) 36000000 / (16 * 9600)
@@ -486,7 +573,25 @@ int main(void)
          Tick = 0;
       }
       
-      // Poll for input here
+      if (UART1RxAvailable()) {
+         const uint8_t ch = UART1RxByte();
+         
+         printf("UART1: %02x\n", ch);
+         switch (ch) {
+         case 'i':
+         case 'I':
+            printDeviceID();
+            break;
+         case 'n':
+         case 'N':
+            printSerialNumber();
+            break;
+         case 'r':
+         case 'R':
+            printResetReason();
+            break;
+         }
+      }
    }
 }
 
