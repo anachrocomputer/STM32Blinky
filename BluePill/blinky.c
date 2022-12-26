@@ -331,6 +331,8 @@ void setRGBLed(const int state, const uint8_t fade)
 
 void printDeviceID(void)
 {
+   const uint16_t *const flashSize = (const uint16_t *const)FLASHSIZE_BASE;
+   
    const uint32_t devId = (DBGMCU->IDCODE & DBGMCU_IDCODE_DEV_ID_Msk) >> DBGMCU_IDCODE_DEV_ID_Pos;
    const uint32_t revId = (DBGMCU->IDCODE & DBGMCU_IDCODE_REV_ID_Msk) >> DBGMCU_IDCODE_REV_ID_Pos;
    const uint32_t cpuId = SCB->CPUID;
@@ -363,6 +365,8 @@ void printDeviceID(void)
       printf("Unknown CORE\n");
       break;
    }
+   
+   printf("Flash size: %ukB\n", flashSize[0]);
 }
 
 
@@ -371,7 +375,7 @@ void printDeviceID(void)
 void printSerialNumber(void)
 {
    // See STM32F103xx Reference Manual RM0008, section 30.2
-   uint32_t *id = (uint32_t *)0x1FFFF7E8;
+   const uint32_t *const id = (const uint32_t *const)UID_BASE;
    
    printf("Serial Number = %08x %08x %08x\n", id[0], id[1], id[2]);
 }
