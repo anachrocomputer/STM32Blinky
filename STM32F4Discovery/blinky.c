@@ -21,6 +21,90 @@ uint32_t millis(void)
 
 static void initMCU(void)
 {
+   volatile int dally;
+     
+   //FLASH->ACR = FLASH_ACR_PRFTEN | FLASH_ACR_ICEN | FLASH_ACR_DCEN | FLASH_ACR_LATENCY_7WS;   // Set Flash latency
+   FLASH->ACR |= FLASH_ACR_LATENCY_5WS;   // Set Flash latency to 5 wait states
+   FLASH->ACR |= FLASH_ACR_ICEN;          // Cache enable
+   FLASH->ACR |= FLASH_ACR_DCEN;
+   FLASH->ACR |= FLASH_ACR_PRFTEN;        // Prefetch enable
+   
+   //RCC->CFGR |= RCC_CFGR_HPRE_DIV1;      // Set AHB bus prescaler to divide-by-1
+
+   RCC->CFGR |= RCC_CFGR_PPRE1_DIV4;    // Set APB1 bus to not exceed 42MHz
+   RCC->CFGR |= RCC_CFGR_PPRE2_DIV2;    // Set APB2 bus to not exceed 84MHz
+
+   // Enable power interface clock
+   RCC->APB1ENR |= RCC_APB1ENR_PWREN;
+
+   /* Set voltage scale to 1 for max frequency (PWR_CR:bit 14)
+    * (0b0) scale 2 for fCLK <= 144 MHz
+    * (0b1) scale 1 for 144 MHz < fCLK <= 168 MHz
+    */
+   PWR->CR |= PWR_CR_VOS;
+
+   // Switch on MCO1 for debugging
+   RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;         // Enable clock to GPIO A peripherals on AHB1 bus
+
+   //GPIOA->MODER |= GPIO_MODER_MODER8_0;       // Configure PA8 as output, MCO1
+   GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR8_1;
+
+   // Configure PA8, the GPIO pin with alternative function MCO1
+   GPIOA->MODER |= GPIO_MODER_MODER8_1;          // PA8 in Alternative Function mode
+   //GPIOA->AFR[1] |= 7 << 0;                    // Configure PA8 as alternate function, AF0, MCO1
+
+   RCC->CFGR |= RCC_CFGR_MCO1_1;                 // Send HSE to MCO1
+   RCC->CFGR |= RCC_CFGR_MCO1PRE_1 | RCC_CFGR_MCO1PRE_2; // Prescale divide-by-4
+
+   RCC->CR |= RCC_CR_HSEON;    // Switch on High Speed External clock (8MHz on the STM32F4Discovery)
+
+   // Wait for HSE to start up
+   while ((RCC->CR & RCC_CR_HSERDY) == 0)
+      ;
+
+   for (dally = 0; dally < 100; dally++)
+      ;
+   
+   // Make sure PLL is off before we start to configure it
+   RCC->CR &= ~RCC_CR_PLLON;
+
+   for (dally = 0; dally < 100; dally++)
+      ;
+   
+   // Configure PLL
+   RCC->PLLCFGR &= ~RCC_PLLCFGR_PLLQ;
+   RCC->PLLCFGR |= RCC_PLLCFGR_PLLQ_2 | RCC_PLLCFGR_PLLQ_1 | RCC_PLLCFGR_PLLQ_0;   // Set Q to divide-by 7
+
+   RCC->PLLCFGR &= ~RCC_PLLCFGR_PLLP;            // P = divide-by-2
+
+   RCC->PLLCFGR &= ~RCC_PLLCFGR_PLLN;
+   RCC->PLLCFGR |= 168 << RCC_PLLCFGR_PLLN_Pos;   // N = multiply-by-168
+
+   RCC->PLLCFGR &= ~RCC_PLLCFGR_PLLM;
+   RCC->PLLCFGR |= 4 << RCC_PLLCFGR_PLLM_Pos;      // M = divide-by-4
+
+   RCC->PLLCFGR |= RCC_PLLCFGR_PLLSRC_HSE;    // Select HSE as PLL input
+   
+   for (dally = 0; dally < 100; dally++)
+      ;
+   
+   RCC->CR |= RCC_CR_PLLON;             // Switch on the PLL
+
+   // Wait for PLL to start up
+   while ((RCC->CR & RCC_CR_PLLRDY) == 0)
+      ;
+   
+   for (dally = 0; dally < 100; dally++)
+      ;
+   
+   uint32_t reg = RCC->CFGR;
+   reg &= ~RCC_CFGR_SW;
+   reg |= RCC_CFGR_SW_PLL;          // Select PLL as system clock (168MHz)
+   RCC->CFGR = reg;
+   
+   // Wait for PLL to select
+   while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL)
+      ;
 }
 
 
