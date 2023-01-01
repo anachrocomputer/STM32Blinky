@@ -470,7 +470,8 @@ static void initMillisecondTimer(void)
 
 int main(void)
 {
-   volatile int dally;
+   uint32_t end;
+   uint8_t flag = 0;
    
    initMCU();
    initGPIOs();
@@ -480,27 +481,56 @@ int main(void)
    
    __enable_irq();   // Enable all interrupts
    
-   puts("\nHello from the STM32L152");
-  
+   printf("\nHello from the STM%dL%d\n", 32, 152);
+   
+   end = millis() + 500u;
+   
    while (1) {
-      GPIOB->BSRR = GPIO_BSRR_BS_6;        // Blue led ON
-      GPIOB->BSRR = GPIO_BSRR_BR_7;        // Green led OFF
+      if (Tick) {
+         if (millis() >= end) {
+            end = millis() + 500u;
+            
+            if (flag) {
+               GPIOB->BSRR = GPIO_BSRR_BS_6;        // Blue led ON
+               GPIOB->BSRR = GPIO_BSRR_BR_7;        // Green led OFF
+            }
+            else {
+               GPIOB->BSRR = GPIO_BSRR_BR_6;        // Blue led OFF
+               GPIOB->BSRR = GPIO_BSRR_BS_7;        // Green led ON
+            }
+            
+            flag = !flag;
+            
+            UART2TxByte('U');
+            UART2TxByte('2');
+            UART2TxByte(' ');
+            UART2TxByte('S');
+            UART2TxByte('T');
+            UART2TxByte('M');
+            UART2TxByte('3');
+            UART2TxByte('2');
+            UART2TxByte(' ');
+
+            UART3TxByte('U');
+            UART3TxByte('3');
+            UART3TxByte(' ');
+            UART3TxByte('S');
+            UART3TxByte('T');
+            UART3TxByte('M');
+            UART3TxByte('3');
+            UART3TxByte('2');
+            UART3TxByte(' ');
+            
+            printf("millis() = %ld\n", millis());
+         }
+         
+         Tick = 0;
+      }
       
-      UART1TxByte('A');
-      UART2TxByte('-');
-      UART3TxByte('X');
-      
-      for (dally = 0; dally < 400000; dally++)
-         ;
-      
-      GPIOB->BSRR = GPIO_BSRR_BR_6;        // Blue led OFF
-      GPIOB->BSRR = GPIO_BSRR_BS_7;        // Green led ON
-      
-      UART1TxByte('B');
-      UART2TxByte('*');
-      UART3TxByte('Y');
-      
-      for (dally = 0; dally < 400000; dally++)
-         ;
+      if (UART1RxAvailable()) {
+         const uint8_t ch = UART1RxByte();
+         
+         printf("UART1: %02x\n", ch);
+      }
    }
 }
