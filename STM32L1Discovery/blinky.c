@@ -531,6 +531,27 @@ static void initUARTs(void)
 }
 
 
+/* initDAC --- set up the Digital-to-Analog Converter */
+
+static void initDAC(void)
+{
+   // Channel 0 is on PA4 and channel 1 is on PA5
+   // PA4 is in use on STM32L-Discovery for Idd sensing
+   
+   RCC->AHBENR |= RCC_AHBENR_GPIOAEN;        // Enable clock to GPIO A peripherals on AHB bus
+   RCC->APB1ENR |= RCC_APB1ENR_DACEN;        // Enable DAC clock
+   
+   //GPIOA->MODER |= GPIO_MODER_MODER4_1 | GPIO_MODER_MODER4_0;    // Mode bits 11 on PA4 for DAC analog out
+   GPIOA->MODER |= GPIO_MODER_MODER5_1 | GPIO_MODER_MODER5_0;    // Mode bits 11 on PA5 for DAC analog out
+   
+   //DAC->CR |= DAC_CR_EN1;	// Switch the DAC channel 1 on
+   DAC->CR |= DAC_CR_EN2;	// Switch the DAC channel 2 on
+   
+   //DAC->CR |= DAC_CR_BOFF1;  // Switch off buffer amp to remove clipping
+   DAC->CR |= DAC_CR_BOFF2;  // Switch off buffer amp to remove clipping
+}
+
+
 /* initPWM --- set up PWM channels */
 
 static void initPWM(void)
@@ -554,10 +575,12 @@ int main(void)
 {
    uint32_t end;
    uint8_t flag = 0;
+   uint16_t dac = 0;
    
    initMCU();
    initGPIOs();
    initUARTs();
+   initDAC();
    initPWM();
    initMillisecondTimer();
    
@@ -567,8 +590,17 @@ int main(void)
    
    end = millis() + 500u;
    
+   DAC->DHR12R2 = 0x0;
+   
    while (1) {
       if (Tick) {
+         DAC->DHR12R2 = dac;  // Generate a voltage ramp on PA5
+         
+         if (dac >= 4095)
+            dac = 0;
+         else
+            dac++;
+         
          if (millis() >= end) {
             end = millis() + 500u;
             
