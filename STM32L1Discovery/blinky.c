@@ -171,12 +171,12 @@ void SysTick_Handler(void)
    Milliseconds++;
    Tick = 1;
    
-   // DEBUG: 500Hz on PC14 pin
+   // DEBUG: 500Hz on PC13 pin
    if (flag)
-      GPIOC->BSRR = GPIO_BSRR_BR_14; // GPIO pin PC14 LOW
+      GPIOC->BSRR = GPIO_BSRR_BR_13; // GPIO pin PC13 LOW
    else
-      GPIOC->BSRR = GPIO_BSRR_BS_14; // GPIO pin PC14 HIGH
-      
+      GPIOC->BSRR = GPIO_BSRR_BS_13; // GPIO pin PC13 HIGH
+   
    flag = !flag;
 }
 
@@ -308,8 +308,8 @@ static void initGPIOs(void)
    GPIOB->MODER |= GPIO_MODER_MODER7_0;     // Configure PB7 as output, green LED
    GPIOB->MODER |= GPIO_MODER_MODER6_0;     // Configure PB6 as output, blue LED
    
-   // Configure PC14, the GPIO pin with 500Hz square wave
-   GPIOC->MODER |= GPIO_MODER_MODER14_0;    // Configure PC14 as output
+   // Configure PC13, the GPIO pin with 500Hz square wave
+   GPIOC->MODER |= GPIO_MODER_MODER13_0;    // Configure PC13 as output
 }
 
 
