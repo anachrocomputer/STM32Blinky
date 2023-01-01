@@ -269,6 +269,88 @@ int _write(const int fd, const char *ptr, const int len)
 }
 
 
+/* printDeviceID --- print the Device ID bytes as read from SCB and DBGMCU */
+
+void printDeviceID(void)
+{
+   const uint16_t *const flashSize = (const uint16_t *const)FLASHSIZE_BASE;
+   
+   const uint32_t devId = (DBGMCU->IDCODE & DBGMCU_IDCODE_DEV_ID_Msk) >> DBGMCU_IDCODE_DEV_ID_Pos;
+   const uint32_t revId = (DBGMCU->IDCODE & DBGMCU_IDCODE_REV_ID_Msk) >> DBGMCU_IDCODE_REV_ID_Pos;
+   const uint32_t cpuId = SCB->CPUID;
+   
+   printf("Device ID = %x rev %x (%08x)\n", devId, revId, DBGMCU->IDCODE);
+   
+   // CPUID in the System Control Block
+   printf("CPUID =  %08x r%dp%d ", cpuId, ((cpuId >> 20) & 0x0F), (cpuId & 0x0F));
+   
+   switch ((cpuId & 0x0000FFF0) >> 4) {
+   case 0xC20:
+      printf("Cortex M0\n");
+      break;
+   case 0xC60:
+      printf("Cortex M0+\n");
+      break;
+   case 0xC21:
+      printf("Cortex M1\n");
+      break;
+   case 0xC23:
+      printf("Cortex M3\n");
+      break;
+   case 0xC24:
+      printf("Cortex M4\n");
+      break;
+   case 0xC27:
+      printf("Cortex M7\n");
+      break;
+   default:
+      printf("Unknown CORE\n");
+      break;
+   }
+   
+   printf("Flash size: %ukB\n", flashSize[0]);
+}
+
+
+/* printSerialNumber --- print the chip's unique serial number */
+
+void printSerialNumber(void)
+{
+   // See STM32L152xx Reference Manual RM0038, section 31.2
+   const uint32_t *const id = (const uint32_t *const)UID_BASE;
+   
+   printf("Serial Number = %08x %08x %08x\n", id[0], id[1], id[2]);
+}
+
+
+/* printResetReason --- print the cause of the chip's reset */
+
+void printResetReason(void)
+{
+   printf("RCC_CSR = 0x%08x ", SavedRccCsr);
+   
+   if (SavedRccCsr & RCC_CSR_LPWRRSTF)
+      printf("LPWRR ");
+   
+   if (SavedRccCsr & RCC_CSR_WWDGRSTF)
+      printf("WWDGR ");
+   
+   if (SavedRccCsr & RCC_CSR_IWDGRSTF)
+      printf("IWDGR ");
+   
+   if (SavedRccCsr & RCC_CSR_SFTRSTF)
+      printf("SFTR ");
+   
+   if (SavedRccCsr & RCC_CSR_PORRSTF)
+      printf("PORR ");
+   
+   if (SavedRccCsr & RCC_CSR_PINRSTF)
+      printf("PINR ");
+   
+   printf("\n");
+}
+
+
 /* initMCU --- set up the microcontroller in general */
 
 static void initMCU(void)
@@ -531,6 +613,20 @@ int main(void)
          const uint8_t ch = UART1RxByte();
          
          printf("UART1: %02x\n", ch);
+         switch (ch) {
+         case 'i':
+         case 'I':
+            printDeviceID();
+            break;
+         case 'n':
+         case 'N':
+            printSerialNumber();
+            break;
+         case 'r':
+         case 'R':
+            printResetReason();
+            break;
+         }
       }
    }
 }
