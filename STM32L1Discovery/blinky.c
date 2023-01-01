@@ -2,10 +2,157 @@
 
 #include "stm32l1xx.h"
 
+#include <stdio.h>
+#include <stdint.h>
+
+#define UART_RX_BUFFER_SIZE  (128)
+#define UART_RX_BUFFER_MASK (UART_RX_BUFFER_SIZE - 1)
+#if (UART_RX_BUFFER_SIZE & UART_RX_BUFFER_MASK) != 0
+#error UART_RX_BUFFER_SIZE must be a power of two and <= 256
+#endif
+
+#define UART_TX_BUFFER_SIZE  (128)
+#define UART_TX_BUFFER_MASK (UART_TX_BUFFER_SIZE - 1)
+#if (UART_TX_BUFFER_SIZE & UART_TX_BUFFER_MASK) != 0
+#error UART_TX_BUFFER_SIZE must be a power of two and <= 256
+#endif
+
+struct UART_RX_BUFFER
+{
+    volatile uint8_t head;
+    volatile uint8_t tail;
+    uint8_t buf[UART_RX_BUFFER_SIZE];
+};
+
+struct UART_TX_BUFFER
+{
+    volatile uint8_t head;
+    volatile uint8_t tail;
+    uint8_t buf[UART_TX_BUFFER_SIZE];
+};
+
+struct UART_BUFFER
+{
+    struct UART_TX_BUFFER tx;
+    struct UART_RX_BUFFER rx;
+};
+
+// UART buffers
+struct UART_BUFFER U1Buf;
+struct UART_BUFFER U2Buf;
+struct UART_BUFFER U3Buf;
 
 uint32_t SavedRccCsr = 0u;
 volatile uint32_t Milliseconds = 0;
 volatile uint8_t Tick = 0;
+
+/* USART1_IRQHandler --- ISR for USART1, used for Rx and Tx */
+
+void USART1_IRQHandler(void)
+{
+   if (USART1->SR & USART_SR_RXNE) {
+      const uint8_t tmphead = (U1Buf.rx.head + 1) & UART_RX_BUFFER_MASK;
+      const uint8_t ch = USART1->DR;  // Read received byte from UART
+      
+      if (tmphead == U1Buf.rx.tail)   // Is receive buffer full?
+      {
+          // Buffer is full; discard new byte
+      }
+      else
+      {
+         U1Buf.rx.head = tmphead;
+         U1Buf.rx.buf[tmphead] = ch;   // Store byte in buffer
+      }
+   }
+   
+   if (USART1->SR & USART_SR_TXE) {
+      if (U1Buf.tx.head != U1Buf.tx.tail) // Is there anything to send?
+      {
+         const uint8_t tmptail = (U1Buf.tx.tail + 1) & UART_TX_BUFFER_MASK;
+         
+         U1Buf.tx.tail = tmptail;
+
+         USART1->DR = U1Buf.tx.buf[tmptail];    // Transmit one byte
+      }
+      else
+      {
+         USART1->CR1 &= ~USART_CR1_TXEIE; // Nothing left to send; disable Tx Empty interrupt
+      }
+   }
+}
+
+
+/* USART2_IRQHandler --- ISR for USART2, used for Rx and Tx */
+
+void USART2_IRQHandler(void)
+{
+   if (USART2->SR & USART_SR_RXNE) {
+      const uint8_t tmphead = (U2Buf.rx.head + 1) & UART_RX_BUFFER_MASK;
+      const uint8_t ch = USART2->DR;  // Read received byte from UART
+      
+      if (tmphead == U2Buf.rx.tail)   // Is receive buffer full?
+      {
+          // Buffer is full; discard new byte
+      }
+      else
+      {
+         U2Buf.rx.head = tmphead;
+         U2Buf.rx.buf[tmphead] = ch;   // Store byte in buffer
+      }
+   }
+   
+   if (USART2->SR & USART_SR_TXE) {
+      if (U2Buf.tx.head != U2Buf.tx.tail) // Is there anything to send?
+      {
+         const uint8_t tmptail = (U2Buf.tx.tail + 1) & UART_TX_BUFFER_MASK;
+         
+         U2Buf.tx.tail = tmptail;
+
+         USART2->DR = U2Buf.tx.buf[tmptail];    // Transmit one byte
+      }
+      else
+      {
+         USART2->CR1 &= ~USART_CR1_TXEIE; // Nothing left to send; disable Tx Empty interrupt
+      }
+   }
+}
+
+
+/* USART3_IRQHandler --- ISR for USART3, used for Rx and Tx */
+
+void USART3_IRQHandler(void)
+{
+   if (USART3->SR & USART_SR_RXNE) {
+      const uint8_t tmphead = (U3Buf.rx.head + 1) & UART_RX_BUFFER_MASK;
+      const uint8_t ch = USART3->DR;  // Read received byte from UART
+      
+      if (tmphead == U3Buf.rx.tail)   // Is receive buffer full?
+      {
+          // Buffer is full; discard new byte
+      }
+      else
+      {
+         U3Buf.rx.head = tmphead;
+         U3Buf.rx.buf[tmphead] = ch;   // Store byte in buffer
+      }
+   }
+   
+   if (USART3->SR & USART_SR_TXE) {
+      if (U3Buf.tx.head != U3Buf.tx.tail) // Is there anything to send?
+      {
+         const uint8_t tmptail = (U3Buf.tx.tail + 1) & UART_TX_BUFFER_MASK;
+         
+         U3Buf.tx.tail = tmptail;
+
+         USART3->DR = U3Buf.tx.buf[tmptail];    // Transmit one byte
+      }
+      else
+      {
+         USART3->CR1 &= ~USART_CR1_TXEIE; // Nothing left to send; disable Tx Empty interrupt
+      }
+   }
+}
+
 
 /* millis --- return milliseconds since reset */
 
@@ -31,6 +178,94 @@ void SysTick_Handler(void)
       GPIOC->BSRR = GPIO_BSRR_BS_14; // GPIO pin PC14 HIGH
       
    flag = !flag;
+}
+
+
+/* UART1RxByte --- read one character from UART1 via the circular buffer */
+
+uint8_t UART1RxByte(void)
+{
+   const uint8_t tmptail = (U1Buf.rx.tail + 1) & UART_RX_BUFFER_MASK;
+   
+   while (U1Buf.rx.head == U1Buf.rx.tail)  // Wait, if buffer is empty
+       ;
+   
+   U1Buf.rx.tail = tmptail;
+   
+   return (U1Buf.rx.buf[tmptail]);
+}
+
+
+/* UART1RxAvailable --- return true if a byte is available in UART1 circular buffer */
+
+int UART1RxAvailable(void)
+{
+   return (U1Buf.rx.head != U1Buf.rx.tail);
+}
+
+
+/* UART1TxByte --- send one character to UART1 via the circular buffer */
+
+void UART1TxByte(const uint8_t data)
+{
+   const uint8_t tmphead = (U1Buf.tx.head + 1) & UART_TX_BUFFER_MASK;
+   
+   while (tmphead == U1Buf.tx.tail)   // Wait, if buffer is full
+       ;
+
+   U1Buf.tx.buf[tmphead] = data;
+   U1Buf.tx.head = tmphead;
+
+   USART1->CR1 |= USART_CR1_TXEIE;   // Enable UART1 Tx Empty interrupt
+}
+
+
+/* UART2TxByte --- send one character to UART2 via the circular buffer */
+
+void UART2TxByte(const uint8_t data)
+{
+   const uint8_t tmphead = (U2Buf.tx.head + 1) & UART_TX_BUFFER_MASK;
+   
+   while (tmphead == U2Buf.tx.tail)   // Wait, if buffer is full
+       ;
+
+   U2Buf.tx.buf[tmphead] = data;
+   U2Buf.tx.head = tmphead;
+
+   USART2->CR1 |= USART_CR1_TXEIE;   // Enable UART2 Tx Empty interrupt
+}
+
+
+/* UART3TxByte --- send one character to UART3 via the circular buffer */
+
+void UART3TxByte(const uint8_t data)
+{
+   const uint8_t tmphead = (U3Buf.tx.head + 1) & UART_TX_BUFFER_MASK;
+   
+   while (tmphead == U3Buf.tx.tail)   // Wait, if buffer is full
+       ;
+
+   U3Buf.tx.buf[tmphead] = data;
+   U3Buf.tx.head = tmphead;
+
+   USART3->CR1 |= USART_CR1_TXEIE;   // Enable UART3 Tx Empty interrupt
+}
+
+
+/* _write --- connect stdio functions to UART1 */
+
+int _write(const int fd, const char *ptr, const int len)
+{
+   int i;
+
+   for (i = 0; i < len; i++) {
+      if (*ptr == '\n')
+         UART1TxByte('\r');
+      
+      UART1TxByte(*ptr++);
+   }
+  
+   return (len);
 }
 
 
@@ -82,6 +317,89 @@ static void initGPIOs(void)
 
 static void initUARTs(void)
 {
+   RCC->AHBENR |= RCC_AHBENR_GPIOAEN;        // Enable clock to GPIO A peripherals on AHB bus
+   RCC->AHBENR |= RCC_AHBENR_GPIOBEN;        // Enable clock to GPIO B peripherals on AHB bus
+   RCC->APB2ENR |= RCC_APB2ENR_USART1EN;     // Enable USART1 clock
+   RCC->APB1ENR |= RCC_APB1ENR_USART2EN;     // Enable USART2 clock
+   RCC->APB1ENR |= RCC_APB1ENR_USART3EN;     // Enable USART3 clock
+   
+   // Set up UART1 and associated circular buffers
+   U1Buf.tx.head = 0;
+   U1Buf.tx.tail = 0;
+   U1Buf.rx.head = 0;
+   U1Buf.rx.tail = 0;
+   
+   // Configure PA9, the GPIO pin with alternative function TxD1
+   GPIOA->MODER |= GPIO_MODER_MODER9_1;          // PA9 in Alternative Function mode
+   GPIOA->AFR[1] |= 7 << 4;                      // Configure PA9 as alternate function, AF7, UART1
+   
+   // Configure PA10, the GPIO pin with alternative function RxD1
+   GPIOA->MODER |= GPIO_MODER_MODER10_1;         // PA10 in Alternative Function mode
+   GPIOA->AFR[1] |= 7 << 8;                      // Configure PA10 as alternate function, AF7, UART1
+   
+   // Select high speed for UART1 pins
+   GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR9_1 | GPIO_OSPEEDER_OSPEEDR10_1;
+   
+   // Configure UART1 - defaults are 1 start bit, 8 data bits, 1 stop bit, no parity
+   USART1->CR1 |= USART_CR1_UE;           // Switch on the UART
+   USART1->BRR |= 0x683;                  // Set for 9600 baud (reference manual page 528)
+   USART1->CR1 |= USART_CR1_RXNEIE;       // Enable Rx Not Empty interrupt
+   USART1->CR1 |= USART_CR1_TE;           // Enable transmitter (sends a junk character)
+   USART1->CR1 |= USART_CR1_RE;           // Enable receiver
+   
+   NVIC_EnableIRQ(USART1_IRQn);
+   
+   // Set up UART2 and associated circular buffers
+   U2Buf.tx.head = 0;
+   U2Buf.tx.tail = 0;
+   U2Buf.rx.head = 0;
+   U2Buf.rx.tail = 0;
+   
+   // Configure PA2, the GPIO pin with alternative function TxD2
+   GPIOA->MODER |= GPIO_MODER_MODER2_1;          // PA2 in Alternative Function mode
+   GPIOA->AFR[0] |= 7 << 8;                      // Configure PA2 as alternate function, AF7, UART2
+   
+   // Configure PA3, the GPIO pin with alternative function RxD2
+   GPIOA->MODER |= GPIO_MODER_MODER3_1;         // PA3 in Alternative Function mode
+   GPIOA->AFR[0] |= 7 << 12;                    // Configure PA3 as alternate function, AF7, UART2
+   
+   // Select high speed for UART2 pins
+   GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR2_1 | GPIO_OSPEEDER_OSPEEDR3_1;
+   
+   // Configure UART2 - defaults are 1 start bit, 8 data bits, 1 stop bit, no parity
+   USART2->CR1 |= USART_CR1_UE;           // Switch on the UART
+   USART2->BRR |= 0x683;                  // Set for 9600 baud (reference manual page 528)
+   USART2->CR1 |= USART_CR1_RXNEIE;       // Enable Rx Not Empty interrupt
+   USART2->CR1 |= USART_CR1_TE;           // Enable transmitter (sends a junk character)
+   USART2->CR1 |= USART_CR1_RE;           // Enable receiver
+   
+   NVIC_EnableIRQ(USART2_IRQn);
+   
+   // Set up UART3 and associated circular buffers
+   U3Buf.tx.head = 0;
+   U3Buf.tx.tail = 0;
+   U3Buf.rx.head = 0;
+   U3Buf.rx.tail = 0;
+   
+   // Configure PB10, the GPIO pin with alternative function TxD3
+   GPIOB->MODER |= GPIO_MODER_MODER10_1;         // PB10 in Alternative Function mode
+   GPIOB->AFR[1] |= 7 << 8;                      // Configure PB10 as alternate function, AF7, UART3
+   
+   // Configure PB11, the GPIO pin with alternative function RxD3
+   GPIOB->MODER |= GPIO_MODER_MODER11_1;        // PB11 in Alternative Function mode
+   GPIOB->AFR[1] |= 7 << 12;                    // Configure PB11 as alternate function, AF7, UART3
+   
+   // Select high speed for UART3 pins
+   GPIOB->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR10_1 | GPIO_OSPEEDER_OSPEEDR11_1;
+   
+   // Configure UART3 - defaults are 1 start bit, 8 data bits, 1 stop bit, no parity
+   USART3->CR1 |= USART_CR1_UE;           // Switch on the UART
+   USART3->BRR |= 0x683;                  // Set for 9600 baud (reference manual page 528)
+   USART3->CR1 |= USART_CR1_RXNEIE;       // Enable Rx Not Empty interrupt
+   USART3->CR1 |= USART_CR1_TE;           // Enable transmitter (sends a junk character)
+   USART3->CR1 |= USART_CR1_RE;           // Enable receiver
+   
+   NVIC_EnableIRQ(USART3_IRQn);
 }
 
 
@@ -116,15 +434,25 @@ int main(void)
    
    __enable_irq();   // Enable all interrupts
    
+   puts("\nHello from the STM32L152");
+   
    while (1) {
       GPIOB->BSRR = GPIO_BSRR_BS_6;        // Blue led ON
       GPIOB->BSRR = GPIO_BSRR_BR_7;        // Green led OFF
+      
+      UART1TxByte('A');
+      UART2TxByte('-');
+      UART3TxByte('X');
       
       for (dally = 0; dally < 400000; dally++)
          ;
       
       GPIOB->BSRR = GPIO_BSRR_BR_6;        // Blue led OFF
       GPIOB->BSRR = GPIO_BSRR_BS_7;        // Green led ON
+      
+      UART1TxByte('B');
+      UART2TxByte('*');
+      UART3TxByte('Y');
       
       for (dally = 0; dally < 400000; dally++)
          ;
