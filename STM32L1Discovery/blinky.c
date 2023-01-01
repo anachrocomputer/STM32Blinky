@@ -428,6 +428,18 @@ static void initMCU(void)
 
 static void initGPIOs(void)
 {
+   // Note that on the STM32L-Discovery board, several GPIO pins are connected to the
+   // LCD and are effectively reserved for that purpose. They are:
+   // PA8, PA9, PA10, PB9 are the four LCD_COM0..3 pins.
+   // The STM32L152 has four more LCD LCD_COM4..7 pins but the Discovery does not use them: PC10, PC11, PC12, PD2.
+   // PA1, PA2, PA3, PA6, PA7, PB0, PB1, PB3, PB4, PB5, PB10, PB11, PB12, PB13, PB14, PB15 are LCD_SEG0..15
+   // PB8, PA15, PC0, PC1, PC2, PC3, PC4, PC5, PC6, PC7, PC8, PC9, PC10, PC11, PC12, PD2 are LCD_SEG16..31
+   // PD12, PD13, PD14, PD15, PE0, PE1, PE2, PE3, PC10, PC11, PC12, PD2 are LCD_SEG32..43
+   // The Discovery uses the following: PA1, PA2, PA3, PA15, PB3, PB4, PB5, PB8, PB10, PB11,
+   // PB12, PB13, PB14, PB15, PC0, PC1, PC2, PC3, PC6, PC7, PC8, PC9, PC10, PC11.
+   // Of those, PA9/PA10 clash with UART1, PA2/PA3 clash with UART2, and PB10/PB11 clash with UART3
+   // so we can't use UART comms at the same time as the LCD
+   
    // Configure Reset and Clock Control
    RCC->AHBENR |= RCC_AHBENR_GPIOBEN;        // Enable clock to GPIO B peripherals on AHB bus
    RCC->AHBENR |= RCC_AHBENR_GPIOCEN;        // Enable clock to GPIO C peripherals on AHB bus
@@ -445,6 +457,8 @@ static void initGPIOs(void)
 
 static void initUARTs(void)
 {
+   // See note above about the LCD
+   
    RCC->AHBENR |= RCC_AHBENR_GPIOAEN;        // Enable clock to GPIO A peripherals on AHB bus
    RCC->AHBENR |= RCC_AHBENR_GPIOBEN;        // Enable clock to GPIO B peripherals on AHB bus
    RCC->APB2ENR |= RCC_APB2ENR_USART1EN;     // Enable USART1 clock
