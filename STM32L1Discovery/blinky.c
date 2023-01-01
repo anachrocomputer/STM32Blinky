@@ -289,6 +289,52 @@ static void initMCU(void)
    while (!(RCC->CSR & 0x2))      // Wait for it to become stable and available
       ;
    
+   RCC->APB1ENR |= RCC_APB1ENR_PWREN;      // Enable clock to PWR
+  
+   // Reset PWR so that it's ready to accept DBP bit
+   RCC->APB1RSTR |= RCC_APB1RSTR_PWRRST;
+   RCC->APB1RSTR &= ~(RCC_APB1RSTR_PWRRST);
+
+   // Wait for Voltage Scaling Select Flag to be cleared
+   while ((PWR->CSR & (PWR_CSR_VOSF)) != 0)
+      ;
+    
+   PWR->CR = PWR_CR_VOS_0;    // VOS = range 1 (1.8V)
+  
+   // Wait for Voltage Scaling Select Flag to be cleared
+   while ((PWR->CSR & (PWR_CSR_VOSF)) != 0)
+      ;
+   
+   // Set up Flash wait state
+   FLASH->ACR |= FLASH_ACR_ACC64;     // Enable 64-bit mode (must be set separately from LATENCY and PRFTEN bits)
+  
+   while ((FLASH->ACR & (FLASH_ACR_ACC64)) == 0)
+      ;
+  
+   FLASH->ACR |= FLASH_ACR_PRFTEN;    // Enable pre-fetch
+  
+   while ((FLASH->ACR & (FLASH_ACR_PRFTEN)) == 0)
+      ;
+  
+   FLASH->ACR |= FLASH_ACR_LATENCY;   // Select one wait state
+  
+   while ((FLASH->ACR & (FLASH_ACR_LATENCY)) == 0)
+      ;
+   
+   // Set up PLL to give us 32MHz
+   RCC->CFGR |= RCC_CFGR_PLLMUL4;     // PLLMUL x4 = (16Mhz x 4) = 64MHz
+   RCC->CFGR |= RCC_CFGR_PLLDIV2;     // PLLDIV /2 = (64MHz / 2) = 32MHz
+   
+   RCC->CR |= RCC_CR_PLLON;           // Enable PLL
+   
+   while ((RCC->CR & (RCC_CR_PLLRDY)) == 0)   // Wait for PLL to become ready
+      ;
+   
+   RCC->CFGR |= RCC_CFGR_SW_PLL;    // Switch to PLL clock source
+   
+   while ((RCC->CFGR & (RCC_CFGR_SWS)) != RCC_CFGR_SWS_PLL)   // Wait for PLL to be selected
+      ;
+   
    SystemCoreClockUpdate();
    
    SavedRccCsr = RCC->CSR;
@@ -342,7 +388,7 @@ static void initUARTs(void)
    
    // Configure UART1 - defaults are 1 start bit, 8 data bits, 1 stop bit, no parity
    USART1->CR1 |= USART_CR1_UE;           // Switch on the UART
-   USART1->BRR |= 0x683;                  // Set for 9600 baud (reference manual page 528)
+   USART1->BRR |= 0xD06;                  // Set for 9600 baud (reference manual page 736)
    USART1->CR1 |= USART_CR1_RXNEIE;       // Enable Rx Not Empty interrupt
    USART1->CR1 |= USART_CR1_TE;           // Enable transmitter (sends a junk character)
    USART1->CR1 |= USART_CR1_RE;           // Enable receiver
@@ -368,7 +414,7 @@ static void initUARTs(void)
    
    // Configure UART2 - defaults are 1 start bit, 8 data bits, 1 stop bit, no parity
    USART2->CR1 |= USART_CR1_UE;           // Switch on the UART
-   USART2->BRR |= 0x683;                  // Set for 9600 baud (reference manual page 528)
+   USART2->BRR |= 0xD06;                  // Set for 9600 baud (reference manual page 736)
    USART2->CR1 |= USART_CR1_RXNEIE;       // Enable Rx Not Empty interrupt
    USART2->CR1 |= USART_CR1_TE;           // Enable transmitter (sends a junk character)
    USART2->CR1 |= USART_CR1_RE;           // Enable receiver
@@ -394,7 +440,7 @@ static void initUARTs(void)
    
    // Configure UART3 - defaults are 1 start bit, 8 data bits, 1 stop bit, no parity
    USART3->CR1 |= USART_CR1_UE;           // Switch on the UART
-   USART3->BRR |= 0x683;                  // Set for 9600 baud (reference manual page 528)
+   USART3->BRR |= 0xD06;                  // Set for 9600 baud (reference manual page 736)
    USART3->CR1 |= USART_CR1_RXNEIE;       // Enable Rx Not Empty interrupt
    USART3->CR1 |= USART_CR1_TE;           // Enable transmitter (sends a junk character)
    USART3->CR1 |= USART_CR1_RE;           // Enable receiver
@@ -415,7 +461,7 @@ static void initPWM(void)
 static void initMillisecondTimer(void)
 {
    // Set up timer for regular 1ms interrupt
-   if (SysTick_Config(16000)) { // 16MHz divided by 1000  (SystemCoreClock / 1000)
+   if (SysTick_Config(32000)) { // 32MHz divided by 1000  (SystemCoreClock / 1000)
       while (1)
          ;
    }
@@ -435,7 +481,7 @@ int main(void)
    __enable_irq();   // Enable all interrupts
    
    puts("\nHello from the STM32L152");
-   
+  
    while (1) {
       GPIOB->BSRR = GPIO_BSRR_BS_6;        // Blue led ON
       GPIOB->BSRR = GPIO_BSRR_BR_7;        // Green led OFF
