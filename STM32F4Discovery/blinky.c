@@ -322,7 +322,8 @@ static void initMillisecondTimer(void)
 
 int main(void)
 {
-   volatile int dally;
+   uint32_t end;
+   uint8_t flag = 0;
    
    initMCU();
    initGPIOs();
@@ -335,25 +336,37 @@ int main(void)
    printf("\nHello from the STM%dF%d\n", 32, 407);
    
    while (1) {
-      GPIOD->BSRR = GPIO_BSRR_BR12; // GPIO pin PD12 LOW, green LED off
-      GPIOD->BSRR = GPIO_BSRR_BS13; // GPIO pin PD13 HIGH, amber LED on
-      GPIOD->BSRR = GPIO_BSRR_BR14; // GPIO pin PD14 LOW, red LED off
-      GPIOD->BSRR = GPIO_BSRR_BS15; // GPIO pin PD15 HIGH, blue LED on
+      if (Tick) {
+         if (millis() >= end) {
+            end = millis() + 500u;
+            
+            if (flag) {
+               GPIOD->BSRR = GPIO_BSRR_BR12; // GPIO pin PD12 LOW, green LED off
+               GPIOD->BSRR = GPIO_BSRR_BS13; // GPIO pin PD13 HIGH, amber LED on
+               GPIOD->BSRR = GPIO_BSRR_BR14; // GPIO pin PD14 LOW, red LED off
+               GPIOD->BSRR = GPIO_BSRR_BS15; // GPIO pin PD15 HIGH, blue LED on
+            }
+            else {
+               GPIOD->BSRR = GPIO_BSRR_BS12; // GPIO pin PD12 HIGH, green LED on
+               GPIOD->BSRR = GPIO_BSRR_BR13; // GPIO pin PD13 LOW, amber LED off
+               GPIOD->BSRR = GPIO_BSRR_BS14; // GPIO pin PD14 HIGH, red LED on
+               GPIOD->BSRR = GPIO_BSRR_BR15; // GPIO pin PD15 LOW, blue LED off
       
-      UART2TxByte('-');
-      
-      for (dally = 0; dally < 4000000; dally++)
-         ;
+            }
+            
+            flag = !flag;
+            
+            printf("millis() = %ld\n", millis());
+         }
          
-      GPIOD->BSRR = GPIO_BSRR_BS12; // GPIO pin PD12 HIGH, green LED on
-      GPIOD->BSRR = GPIO_BSRR_BR13; // GPIO pin PD13 LOW, amber LED off
-      GPIOD->BSRR = GPIO_BSRR_BS14; // GPIO pin PD14 HIGH, red LED on
-      GPIOD->BSRR = GPIO_BSRR_BR15; // GPIO pin PD15 LOW, blue LED off
+         Tick = 0;
+      }
       
-      UART2TxByte('*');
-      
-      for (dally = 0; dally < 4000000; dally++)
-         ;
+      if (UART2RxAvailable()) {
+         const uint8_t ch = UART2RxByte();
+         
+         printf("UART2: %02x\n", ch);
+      }
    }
 }
 
