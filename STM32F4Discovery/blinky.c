@@ -4,9 +4,79 @@
 
 #include <stdint.h>
 
+#define UART_RX_BUFFER_SIZE  (128)
+#define UART_RX_BUFFER_MASK (UART_RX_BUFFER_SIZE - 1)
+#if (UART_RX_BUFFER_SIZE & UART_RX_BUFFER_MASK) != 0
+#error UART_RX_BUFFER_SIZE must be a power of two and <= 256
+#endif
+
+#define UART_TX_BUFFER_SIZE  (128)
+#define UART_TX_BUFFER_MASK (UART_TX_BUFFER_SIZE - 1)
+#if (UART_TX_BUFFER_SIZE & UART_TX_BUFFER_MASK) != 0
+#error UART_TX_BUFFER_SIZE must be a power of two and <= 256
+#endif
+
+struct UART_RX_BUFFER
+{
+    volatile uint8_t head;
+    volatile uint8_t tail;
+    uint8_t buf[UART_RX_BUFFER_SIZE];
+};
+
+struct UART_TX_BUFFER
+{
+    volatile uint8_t head;
+    volatile uint8_t tail;
+    uint8_t buf[UART_TX_BUFFER_SIZE];
+};
+
+struct UART_BUFFER
+{
+    struct UART_TX_BUFFER tx;
+    struct UART_RX_BUFFER rx;
+};
+
+// UART buffers
+struct UART_BUFFER U2Buf;  // Only UART2 is useful on the STM32F4Discovery
 
 volatile uint32_t Milliseconds = 0;
 volatile uint8_t Tick = 0;
+
+
+/* USART2_IRQHandler --- ISR for USART2, used for Rx and Tx */
+
+void USART2_IRQHandler(void)
+{
+   if (USART2->SR & USART_SR_RXNE) {
+      const uint8_t tmphead = (U2Buf.rx.head + 1) & UART_RX_BUFFER_MASK;
+      const uint8_t ch = USART2->DR;  // Read received byte from UART
+      
+      if (tmphead == U2Buf.rx.tail)   // Is receive buffer full?
+      {
+          // Buffer is full; discard new byte
+      }
+      else
+      {
+         U2Buf.rx.head = tmphead;
+         U2Buf.rx.buf[tmphead] = ch;   // Store byte in buffer
+      }
+   }
+   
+   if (USART2->SR & USART_SR_TXE) {
+      if (U2Buf.tx.head != U2Buf.tx.tail) // Is there anything to send?
+      {
+         const uint8_t tmptail = (U2Buf.tx.tail + 1) & UART_TX_BUFFER_MASK;
+         
+         U2Buf.tx.tail = tmptail;
+
+         USART2->DR = U2Buf.tx.buf[tmptail];    // Transmit one byte
+      }
+      else
+      {
+         USART2->CR1 &= ~USART_CR1_TXEIE; // Nothing left to send; disable Tx Empty interrupt
+      }
+   }
+}
 
 
 /* millis --- return milliseconds since reset */
@@ -33,6 +103,62 @@ void SysTick_Handler(void)
       GPIOC->BSRR = GPIO_BSRR_BS13; // GPIO pin PC13 HIGH
       
    flag = !flag;
+}
+
+
+/* UART2RxByte --- read one character from UART2 via the circular buffer */
+
+uint8_t UART2RxByte(void)
+{
+   const uint8_t tmptail = (U2Buf.rx.tail + 1) & UART_RX_BUFFER_MASK;
+   
+   while (U2Buf.rx.head == U2Buf.rx.tail)  // Wait, if buffer is empty
+       ;
+   
+   U2Buf.rx.tail = tmptail;
+   
+   return (U2Buf.rx.buf[tmptail]);
+}
+
+
+/* UART2RxAvailable --- return true if a byte is available in UART2 circular buffer */
+
+int UART2RxAvailable(void)
+{
+   return (U2Buf.rx.head != U2Buf.rx.tail);
+}
+
+
+/* UART2TxByte --- send one character to UART2 via the circular buffer */
+
+void UART2TxByte(const uint8_t data)
+{
+   const uint8_t tmphead = (U2Buf.tx.head + 1) & UART_TX_BUFFER_MASK;
+   
+   while (tmphead == U2Buf.tx.tail)   // Wait, if buffer is full
+       ;
+
+   U2Buf.tx.buf[tmphead] = data;
+   U2Buf.tx.head = tmphead;
+
+   USART2->CR1 |= USART_CR1_TXEIE;   // Enable UART2 Tx Empty interrupt
+}
+
+
+/* _write --- connect stdio functions to UART2 */
+
+int _write(const int fd, const char *ptr, const int len)
+{
+   int i;
+
+   for (i = 0; i < len; i++) {
+      if (*ptr == '\n')
+         UART2TxByte('\r');
+      
+      UART2TxByte(*ptr++);
+   }
+  
+   return (len);
 }
 
 
@@ -138,6 +264,40 @@ static void initGPIOs(void)
 
 static void initUARTs(void)
 {
+   RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;        // Enable clock to GPIO A peripherals on AHB1 bus
+   RCC->APB1ENR |= RCC_APB1ENR_USART2EN;       // Enable USART2 clock
+   
+   // UART1 TxD on pin PA9 is connected to the green LED LD7 and USB Vbus
+   // UART1 RxD on pin PA10 is connected to USB ID
+   
+   // Set up UART2 and associated circular buffers
+   U2Buf.tx.head = 0;
+   U2Buf.tx.tail = 0;
+   U2Buf.rx.head = 0;
+   U2Buf.rx.tail = 0;
+
+   // Configure PA2, the GPIO pin with alternative function TxD2
+   GPIOA->MODER |= GPIO_MODER_MODER2_1;        // PA2 in Alternative Function mode
+   GPIOA->AFR[0] |= 7 << 8;                    // Configure PA2 as alternate function, AF7, UART2
+  
+   // Configure PA3, the GPIO pin with alternative function RxD2
+   GPIOA->MODER |= GPIO_MODER_MODER3_1;        // PA3 in Alternative Function mode
+   GPIOA->AFR[0] |= 7 << 12;                   // Configure PA3 as alternate function, AF7, UART2
+  
+   // Select high speed for UART2 pins
+   GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR2_1 | GPIO_OSPEEDER_OSPEEDR3_1;
+  
+   // Configure UART2 - defaults are 1 start bit, 8 data bits, 1 stop bit, no parity
+   USART2->CR1 |= USART_CR1_UE;           // Switch on the UART
+   USART2->BRR |= (273<<4) | 7;           // Set for 9600 baud (reference manual page 1010) 42000000 / (16 * 9600)
+   USART2->CR1 |= USART_CR1_RXNEIE;       // Enable Rx Not Empty interrupt
+   USART2->CR1 |= USART_CR1_TE;           // Enable transmitter (sends a junk character)
+   USART2->CR1 |= USART_CR1_RE;           // Enable receiver
+
+   NVIC_EnableIRQ(USART2_IRQn);
+   
+   // UART3 TxD on pin PB10 is connected to the audio sensor CLK
+   // UART3 RxD on pin PB11 is available
 }
 
 
@@ -172,11 +332,15 @@ int main(void)
    
    __enable_irq();   // Enable all interrupts
    
+   printf("\nHello from the STM%dF%d\n", 32, 407);
+   
    while (1) {
       GPIOD->BSRR = GPIO_BSRR_BR12; // GPIO pin PD12 LOW, green LED off
       GPIOD->BSRR = GPIO_BSRR_BS13; // GPIO pin PD13 HIGH, amber LED on
       GPIOD->BSRR = GPIO_BSRR_BR14; // GPIO pin PD14 LOW, red LED off
       GPIOD->BSRR = GPIO_BSRR_BS15; // GPIO pin PD15 HIGH, blue LED on
+      
+      UART2TxByte('-');
       
       for (dally = 0; dally < 4000000; dally++)
          ;
@@ -185,6 +349,8 @@ int main(void)
       GPIOD->BSRR = GPIO_BSRR_BR13; // GPIO pin PD13 LOW, amber LED off
       GPIOD->BSRR = GPIO_BSRR_BS14; // GPIO pin PD14 HIGH, red LED on
       GPIOD->BSRR = GPIO_BSRR_BR15; // GPIO pin PD15 LOW, blue LED off
+      
+      UART2TxByte('*');
       
       for (dally = 0; dally < 4000000; dally++)
          ;
