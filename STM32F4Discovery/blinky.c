@@ -21,15 +21,14 @@ uint32_t millis(void)
 
 static void initMCU(void)
 {
-   volatile int dally;
-     
-   //FLASH->ACR = FLASH_ACR_PRFTEN | FLASH_ACR_ICEN | FLASH_ACR_DCEN | FLASH_ACR_LATENCY_7WS;   // Set Flash latency
+   RCC->CR      = 0x00000083;
+   RCC->CFGR    = 0x00000000;
+   RCC->PLLCFGR = 0x24003010;
+   
    FLASH->ACR |= FLASH_ACR_LATENCY_5WS;   // Set Flash latency to 5 wait states
    FLASH->ACR |= FLASH_ACR_ICEN;          // Cache enable
    FLASH->ACR |= FLASH_ACR_DCEN;
    FLASH->ACR |= FLASH_ACR_PRFTEN;        // Prefetch enable
-   
-   //RCC->CFGR |= RCC_CFGR_HPRE_DIV1;      // Set AHB bus prescaler to divide-by-1
 
    RCC->CFGR |= RCC_CFGR_PPRE1_DIV4;    // Set APB1 bus to not exceed 42MHz
    RCC->CFGR |= RCC_CFGR_PPRE2_DIV2;    // Set APB2 bus to not exceed 84MHz
@@ -44,32 +43,25 @@ static void initMCU(void)
    PWR->CR |= PWR_CR_VOS;
 
    // Switch on MCO1 for debugging
-   RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;         // Enable clock to GPIO A peripherals on AHB1 bus
+   //RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;         // Enable clock to GPIO A peripherals on AHB1 bus
 
    //GPIOA->MODER |= GPIO_MODER_MODER8_0;       // Configure PA8 as output, MCO1
-   GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR8_1;
+   //GPIOA->OSPEEDR |= GPIO_OSPEEDER_OSPEEDR8_1;
 
    // Configure PA8, the GPIO pin with alternative function MCO1
-   GPIOA->MODER |= GPIO_MODER_MODER8_1;          // PA8 in Alternative Function mode
-   //GPIOA->AFR[1] |= 7 << 0;                    // Configure PA8 as alternate function, AF0, MCO1
+   //GPIOA->MODER |= GPIO_MODER_MODER8_1;          // PA8 in Alternative Function mode
 
-   RCC->CFGR |= RCC_CFGR_MCO1_1;                 // Send HSE to MCO1
-   RCC->CFGR |= RCC_CFGR_MCO1PRE_1 | RCC_CFGR_MCO1PRE_2; // Prescale divide-by-4
+   //RCC->CFGR |= RCC_CFGR_MCO1_1;                 // Send HSE to MCO1
+   //RCC->CFGR |= RCC_CFGR_MCO1PRE_1 | RCC_CFGR_MCO1PRE_2; // Prescale divide-by-4
 
    RCC->CR |= RCC_CR_HSEON;    // Switch on High Speed External clock (8MHz on the STM32F4Discovery)
 
    // Wait for HSE to start up
    while ((RCC->CR & RCC_CR_HSERDY) == 0)
       ;
-
-   for (dally = 0; dally < 100; dally++)
-      ;
    
    // Make sure PLL is off before we start to configure it
    RCC->CR &= ~RCC_CR_PLLON;
-
-   for (dally = 0; dally < 100; dally++)
-      ;
    
    // Configure PLL
    RCC->PLLCFGR &= ~RCC_PLLCFGR_PLLQ;
@@ -85,16 +77,10 @@ static void initMCU(void)
 
    RCC->PLLCFGR |= RCC_PLLCFGR_PLLSRC_HSE;    // Select HSE as PLL input
    
-   for (dally = 0; dally < 100; dally++)
-      ;
-   
    RCC->CR |= RCC_CR_PLLON;             // Switch on the PLL
 
    // Wait for PLL to start up
    while ((RCC->CR & RCC_CR_PLLRDY) == 0)
-      ;
-   
-   for (dally = 0; dally < 100; dally++)
       ;
    
    uint32_t reg = RCC->CFGR;
@@ -105,6 +91,8 @@ static void initMCU(void)
    // Wait for PLL to select
    while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL)
       ;
+   
+   SystemCoreClockUpdate();
 }
 
 
@@ -161,7 +149,7 @@ int main(void)
       GPIOD->BSRR = GPIO_BSRR_BR14; // GPIO pin PD14 LOW, red LED off
       GPIOD->BSRR = GPIO_BSRR_BS15; // GPIO pin PD15 HIGH, blue LED on
       
-      for (dally = 0; dally < 400000; dally++)
+      for (dally = 0; dally < 4000000; dally++)
          ;
          
       GPIOD->BSRR = GPIO_BSRR_BS12; // GPIO pin PD12 HIGH, green LED on
@@ -169,7 +157,7 @@ int main(void)
       GPIOD->BSRR = GPIO_BSRR_BS14; // GPIO pin PD14 HIGH, red LED on
       GPIOD->BSRR = GPIO_BSRR_BR15; // GPIO pin PD15 LOW, blue LED off
       
-      for (dally = 0; dally < 400000; dally++)
+      for (dally = 0; dally < 4000000; dally++)
          ;
    }
 }
