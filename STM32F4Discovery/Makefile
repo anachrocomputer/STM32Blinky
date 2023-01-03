@@ -34,8 +34,8 @@ LDSCRIPT=../../STM32CubeF4/Projects/STM32F4-Discovery/Templates/SW4STM32/STM32F4
 STARTUP=$(CMSISDIR)/Device/ST/STM32F4xx/Source/Templates/gcc/startup_stm32f407xx.s
 SYSTEM=$(CMSISDIR)/Device/ST/STM32F4xx/Source/Templates/system_stm32f4xx.c
 
-CFLAGS=-mthumb -c -o $@ -O3 -D$(STM32MCU) -I$(CMSISDIR)/Device/ST/STM32F4xx/Include -I$(CMSISDIR)/Include
-LDFLAGS=-mthumb --specs=nosys.specs -o $@ -T$(LDSCRIPT)
+CFLAGS=-mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -c -o $@ -O3 -D$(STM32MCU) -I$(CMSISDIR)/Device/ST/STM32F4xx/Include -I$(CMSISDIR)/Include
+LDFLAGS=-mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 --specs=nosys.specs -o $@ -T$(LDSCRIPT)
 OCFLAGS=-R .stack -O binary
 SZFLAGS=-B -d
 INFOFLAGS=--descr

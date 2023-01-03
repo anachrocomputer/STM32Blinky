@@ -17,6 +17,25 @@ uint32_t millis(void)
 }
 
 
+/* SysTick_Handler --- ISR for System Timer overflow, used for 1ms ticker */
+
+void SysTick_Handler(void)
+{
+   static uint8_t flag = 0;
+   
+   Milliseconds++;
+   Tick = 1;
+   
+   // DEBUG: 500Hz on PC13 pin
+   if (flag)
+      GPIOC->BSRR = GPIO_BSRR_BR13; // GPIO pin PC13 LOW
+   else
+      GPIOC->BSRR = GPIO_BSRR_BS13; // GPIO pin PC13 HIGH
+      
+   flag = !flag;
+}
+
+
 /* initMCU --- set up the microcontroller in general */
 
 static void initMCU(void)
@@ -101,9 +120,13 @@ static void initMCU(void)
 static void initGPIOs(void)
 {
    // Configure Reset and Clock Control
+   RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN;      // Enable clock to GPIO C peripherals on AHB1 bus
    RCC->AHB1ENR |= RCC_AHB1ENR_GPIODEN;      // Enable clock to GPIO D peripherals on AHB1 bus
    
-   // Configure the GPIO pin with the LEDs
+   // Configure PC13, the GPIO pin with 500Hz square wave
+   GPIOC->MODER |= GPIO_MODER_MODER13_0;     // Configure PC13 as output, 500Hz square wave
+   
+   // Configure the GPIO pins with the LEDs
    GPIOD->MODER |= GPIO_MODER_MODER12_0;     // Configure PD12 as output, green LED
    GPIOD->MODER |= GPIO_MODER_MODER13_0;     // Configure PD13 as output, amber LED
    GPIOD->MODER |= GPIO_MODER_MODER14_0;     // Configure PD14 as output, red LED
@@ -130,6 +153,10 @@ static void initPWM(void)
 static void initMillisecondTimer(void)
 {
    // Set up timer for regular 1ms interrupt
+   if (SysTick_Config(168000)) { // 168MHz divided by 1000  (SystemCoreClock / 1000)
+      while (1)
+         ;
+   }
 }
 
 
@@ -142,6 +169,8 @@ int main(void)
    initUARTs();
    initPWM();
    initMillisecondTimer();
+   
+   __enable_irq();   // Enable all interrupts
    
    while (1) {
       GPIOD->BSRR = GPIO_BSRR_BR12; // GPIO pin PD12 LOW, green LED off
