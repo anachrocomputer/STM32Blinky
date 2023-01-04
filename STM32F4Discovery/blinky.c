@@ -246,6 +246,31 @@ void printResetReason(void)
 }
 
 
+/* printRandomNumber --- print a 32-bit random number from the chip's harware RNG */
+
+void printRandomNumber(void)
+{
+    uint32_t rnd;
+
+    if (RNG->SR & RNG_SR_SEIS) {
+         printf("RNG_SR_SEIS\n");
+         return;
+    }
+
+    if (RNG->SR & RNG_SR_CEIS) {
+         printf("RNG_SR_CEIS\n");
+         return;
+    }
+
+    while ((RNG->SR & RNG_SR_DRDY) == 0)
+         ;
+
+    rnd = RNG->DR;
+
+    printf("Random number is: 0x%08x\n", rnd);
+}
+
+
 /* initMCU --- set up the microcontroller in general */
 
 static void initMCU(void)
@@ -395,6 +420,16 @@ static void initPWM(void)
 }
 
 
+/* initRNG --- set up the random number generator */
+
+static void initRNG(void)
+{
+    RCC->AHB2ENR |= RCC_AHB2ENR_RNGEN;      // Enable clock to random number generator
+
+    RNG->CR |= RNG_CR_RNGEN;            // Enable the random number generator
+}
+
+
 /* initMillisecondTimer --- set up a timer to interrupt every millisecond */
 
 static void initMillisecondTimer(void)
@@ -416,6 +451,7 @@ int main(void)
    initGPIOs();
    initUARTs();
    initPWM();
+   initRNG();
    initMillisecondTimer();
    
    __enable_irq();   // Enable all interrupts
@@ -464,6 +500,9 @@ int main(void)
          case 'r':
          case 'R':
             printResetReason();
+            break;
+         case '#':
+            printRandomNumber();
             break;
          }
       }
