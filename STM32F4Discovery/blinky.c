@@ -38,7 +38,8 @@ struct UART_BUFFER
 };
 
 // UART buffers
-struct UART_BUFFER U2Buf;  // Only UART2 is useful on the STM32F4Discovery
+struct UART_BUFFER U2Buf;  // Only UART2 and UART3 are useful on the STM32F4Discovery
+struct UART_BUFFER U3Buf;
 
 uint32_t SavedRccCsr = 0u;
 volatile uint32_t Milliseconds = 0;
@@ -76,6 +77,42 @@ void USART2_IRQHandler(void)
       else
       {
          USART2->CR1 &= ~USART_CR1_TXEIE; // Nothing left to send; disable Tx Empty interrupt
+      }
+   }
+}
+
+
+/* USART3_IRQHandler --- ISR for USART3, used for Rx and Tx */
+
+void USART3_IRQHandler(void)
+{
+   if (USART3->SR & USART_SR_RXNE) {
+      const uint8_t tmphead = (U3Buf.rx.head + 1) & UART_RX_BUFFER_MASK;
+      const uint8_t ch = USART3->DR;  // Read received byte from UART
+      
+      if (tmphead == U3Buf.rx.tail)   // Is receive buffer full?
+      {
+          // Buffer is full; discard new byte
+      }
+      else
+      {
+         U3Buf.rx.head = tmphead;
+         U3Buf.rx.buf[tmphead] = ch;   // Store byte in buffer
+      }
+   }
+   
+   if (USART3->SR & USART_SR_TXE) {
+      if (U3Buf.tx.head != U3Buf.tx.tail) // Is there anything to send?
+      {
+         const uint8_t tmptail = (U3Buf.tx.tail + 1) & UART_TX_BUFFER_MASK;
+         
+         U3Buf.tx.tail = tmptail;
+
+         USART3->DR = U3Buf.tx.buf[tmptail];    // Transmit one byte
+      }
+      else
+      {
+         USART3->CR1 &= ~USART_CR1_TXEIE; // Nothing left to send; disable Tx Empty interrupt
       }
    }
 }
@@ -144,6 +181,22 @@ void UART2TxByte(const uint8_t data)
    U2Buf.tx.head = tmphead;
 
    USART2->CR1 |= USART_CR1_TXEIE;   // Enable UART2 Tx Empty interrupt
+}
+
+
+/* UART3TxByte --- send one character to UART3 via the circular buffer */
+
+void UART3TxByte(const uint8_t data)
+{
+   const uint8_t tmphead = (U3Buf.tx.head + 1) & UART_TX_BUFFER_MASK;
+   
+   while (tmphead == U3Buf.tx.tail)   // Wait, if buffer is full
+       ;
+
+   U3Buf.tx.buf[tmphead] = data;
+   U3Buf.tx.head = tmphead;
+
+   USART3->CR1 |= USART_CR1_TXEIE;   // Enable UART3 Tx Empty interrupt
 }
 
 
@@ -250,24 +303,24 @@ void printResetReason(void)
 
 void printRandomNumber(void)
 {
-    uint32_t rnd;
+   uint32_t rnd;
 
-    if (RNG->SR & RNG_SR_SEIS) {
-         printf("RNG_SR_SEIS\n");
-         return;
-    }
+   if (RNG->SR & RNG_SR_SEIS) {
+      printf("RNG_SR_SEIS\n");
+      return;
+   }
 
-    if (RNG->SR & RNG_SR_CEIS) {
-         printf("RNG_SR_CEIS\n");
-         return;
-    }
+   if (RNG->SR & RNG_SR_CEIS) {
+      printf("RNG_SR_CEIS\n");
+      return;
+   }
 
-    while ((RNG->SR & RNG_SR_DRDY) == 0)
-         ;
+   while ((RNG->SR & RNG_SR_DRDY) == 0)
+      ;
 
-    rnd = RNG->DR;
+   rnd = RNG->DR;
 
-    printf("Random number is: 0x%08x\n", rnd);
+   printf("Random number is: 0x%08x\n", rnd);
 }
 
 
@@ -377,7 +430,9 @@ static void initGPIOs(void)
 static void initUARTs(void)
 {
    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;        // Enable clock to GPIO A peripherals on AHB1 bus
+   RCC->AHB1ENR |= RCC_AHB1ENR_GPIODEN;        // Enable clock to GPIO D peripherals on AHB1 bus
    RCC->APB1ENR |= RCC_APB1ENR_USART2EN;       // Enable USART2 clock
+   RCC->APB1ENR |= RCC_APB1ENR_USART3EN;       // Enable USART3 clock
    
    // UART1 TxD on pin PA9 is connected to the green LED LD7 and USB Vbus
    // UART1 RxD on pin PA10 is connected to USB ID
@@ -407,9 +462,29 @@ static void initUARTs(void)
    USART2->CR1 |= USART_CR1_RE;           // Enable receiver
 
    NVIC_EnableIRQ(USART2_IRQn);
+      
+   // Set up UART3 and associated circular buffers
+   U3Buf.tx.head = 0;
+   U3Buf.tx.tail = 0;
+   U3Buf.rx.head = 0;
+   U3Buf.rx.tail = 0;
+      
+   // Configure PD8, the GPIO pin with alternative function TxD3
+   GPIOD->MODER |= GPIO_MODER_MODER8_1;        // PD8 in Alternative Function mode
+   GPIOD->AFR[1] |= 7 << 0;                    // Configure PD8 as alternate function, AF7, UART3
    
-   // UART3 TxD on pin PB10 is connected to the audio sensor CLK
-   // UART3 RxD on pin PB11 is available
+   // Configure PD9, the GPIO pin with alternative function RxD3
+   GPIOD->MODER |= GPIO_MODER_MODER9_1;        // PD9 in Alternative Function mode
+   GPIOD->AFR[1] |= 7 << 4;                    // Configure PD9 as alternate function, AF7, UART3
+   
+   // Configure UART3 - defaults are 1 start bit, 8 data bits, 1 stop bit, no parity
+   USART3->CR1 |= USART_CR1_UE;           // Switch on the UART
+   USART3->BRR |= (273<<4) | 7;           // Set for 9600 baud (reference manual page 1010) 42000000 / (16 * 9600)
+   USART3->CR1 |= USART_CR1_RXNEIE;       // Enable Rx Not Empty interrupt
+   USART3->CR1 |= USART_CR1_TE;           // Enable transmitter (sends a junk character)
+   USART3->CR1 |= USART_CR1_RE;           // Enable receiver
+
+   NVIC_EnableIRQ(USART3_IRQn);
 }
 
 
@@ -424,9 +499,9 @@ static void initPWM(void)
 
 static void initRNG(void)
 {
-    RCC->AHB2ENR |= RCC_AHB2ENR_RNGEN;      // Enable clock to random number generator
+   RCC->AHB2ENR |= RCC_AHB2ENR_RNGEN;      // Enable clock to random number generator
 
-    RNG->CR |= RNG_CR_RNGEN;            // Enable the random number generator
+   RNG->CR |= RNG_CR_RNGEN;            // Enable the random number generator
 }
 
 
@@ -477,6 +552,16 @@ int main(void)
             }
             
             flag = !flag;
+            
+            UART3TxByte('U');
+            UART3TxByte('3');
+            UART3TxByte(' ');
+            UART3TxByte('S');
+            UART3TxByte('T');
+            UART3TxByte('M');
+            UART3TxByte('3');
+            UART3TxByte('2');
+            UART3TxByte(' ');
             
             printf("millis() = %ld\n", millis());
          }
