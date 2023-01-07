@@ -518,6 +518,9 @@ static void initUARTs(void)
    NVIC_EnableIRQ(USART3_IRQn);
 }
 
+
+/* initTimers --- set up timer for regular 1Hz interrupts */
+
 static void initTimers(void)
 {
    // The two Basic Timers, 6 and 7, are sufficient to generate regular
@@ -529,7 +532,7 @@ static void initTimers(void)
    TIM7->CR2 = 0;
    TIM7->PSC = 8400 - 1;        // Prescaler: 84MHz, divide-by-8400 to give 10kHz
    TIM7->ARR = 10000 - 1;       // Auto-reload: 10000 to give interrupts at 1Hz
-   TIM6->CNT = 0;               // Counter: 0
+   TIM7->CNT = 0;               // Counter: 0
    TIM7->DIER |= TIM_DIER_UIE;  // Enable interrupt
    TIM7->CR1 |= TIM_CR1_CEN;    // Enable counter
    
