@@ -44,6 +44,10 @@ struct UART_BUFFER U3Buf;
 uint32_t SavedRccCsr = 0u;
 volatile uint32_t Milliseconds = 0;
 volatile uint8_t Tick = 0;
+volatile uint8_t RtcTick = 0;
+volatile uint8_t Hour = 0;
+volatile uint8_t Minute = 0;
+volatile uint8_t Second = 0;
 
 
 /* USART2_IRQHandler --- ISR for USART2, used for Rx and Tx */
@@ -115,6 +119,33 @@ void USART3_IRQHandler(void)
          USART3->CR1 &= ~USART_CR1_TXEIE; // Nothing left to send; disable Tx Empty interrupt
       }
    }
+}
+
+
+/* TIM7_IRQHandler --- ISR for TIM7, used for one-second real-time clock */
+
+void TIM7_IRQHandler(void)
+{
+   TIM7->SR &= ~TIM_SR_UIF;   // Clear timer interrupt flag
+   
+   if (Second >= 59) {
+      if (Minute >= 59) {
+         if (Hour >= 23)
+            Hour = 0;
+         else
+            Hour++;
+            
+         Minute = 0;
+      }
+      else
+         Minute++;
+      
+      Second = 0;
+   }
+   else
+      Second++;
+   
+   RtcTick = 1;
 }
 
 
@@ -487,6 +518,24 @@ static void initUARTs(void)
    NVIC_EnableIRQ(USART3_IRQn);
 }
 
+static void initTimers(void)
+{
+   // The two Basic Timers, 6 and 7, are sufficient to generate regular
+   // interrupts. They have a 16-bit prescaler and a 16-bit counter register
+   
+   RCC->APB1ENR |= RCC_APB1ENR_TIM7EN;        // Enable Timer 7 clock
+   
+   TIM7->CR1 = 0;               // Start with default CR1 and CR2
+   TIM7->CR2 = 0;
+   TIM7->PSC = 8400 - 1;        // Prescaler: 84MHz, divide-by-8400 to give 10kHz
+   TIM7->ARR = 10000 - 1;       // Auto-reload: 10000 to give interrupts at 1Hz
+   TIM6->CNT = 0;               // Counter: 0
+   TIM7->DIER |= TIM_DIER_UIE;  // Enable interrupt
+   TIM7->CR1 |= TIM_CR1_CEN;    // Enable counter
+   
+   NVIC_EnableIRQ(TIM7_IRQn);
+}
+
 
 /* initPWM --- set up PWM channels */
 
@@ -525,6 +574,7 @@ int main(void)
    initMCU();
    initGPIOs();
    initUARTs();
+   initTimers();
    initPWM();
    initRNG();
    initMillisecondTimer();
@@ -567,6 +617,12 @@ int main(void)
          }
          
          Tick = 0;
+      }
+      
+      if (RtcTick) {
+         printf("RTC: %02d:%02d:%02d\n", Hour, Minute, Second);
+         
+         RtcTick = 0;
       }
       
       if (UART2RxAvailable()) {
