@@ -355,6 +355,22 @@ void printRandomNumber(void)
 }
 
 
+/* softwareReset --- reset the microcontroller */
+
+void softwareReset(void)
+{
+   printf("Software RESET...\n");
+   
+   // Delay about 40ms so that the message can get out
+   uint32_t end = millis() + 40u;
+   
+   while (millis() < end)
+      ;
+   
+   NVIC_SystemReset();
+}
+
+
 /* initMCU --- set up the microcontroller in general */
 
 static void initMCU(void)
@@ -644,6 +660,10 @@ int main(void)
          case 'r':
          case 'R':
             printResetReason();
+            break;
+         case 's':
+         case 'S':
+            softwareReset();
             break;
          case '#':
             printRandomNumber();
