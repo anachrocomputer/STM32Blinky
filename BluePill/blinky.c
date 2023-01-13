@@ -425,6 +425,34 @@ void softwareReset(void)
 }
 
 
+/* testWatchdog --- enter an infinite loop to test the watchdog */
+
+void testWatchdog(void)
+{
+   int second;
+   
+   printf("Watchdog test...\n");
+   
+   for (second = 0; ; second++) {
+      printf("%d ", second);
+      fflush(stdout);
+      
+      uint32_t end = millis() + 1000u;
+      
+      while (millis() < end)
+         ;
+   }
+}
+
+
+/* nudgeWatchdog --- reset the watchdog counter */
+
+void nudgeWatchdog(void)
+{
+   IWDG->KR = (uint16_t)0xAAAA;
+}
+
+
 /* initMCU --- set up the microcontroller in general */
 
 static void initMCU(void)
@@ -621,6 +649,18 @@ static void initMillisecondTimer(void)
 }
 
 
+/* initWatchdog --- set up the watchdog timer */
+
+static void initWatchdog(void)
+{
+   IWDG->KR = (uint16_t)0x5555;
+   IWDG->PR = IWDG_PR_PR_2;      // Prescaler divide-by-64 gives 7 seconds
+   IWDG->KR = (uint16_t)0xAAAA;
+   
+   IWDG->KR = (uint16_t)0xCCCC;  // Start the watchdog
+}
+
+
 int main(void)
 {
    int ledState = 0;
@@ -633,6 +673,7 @@ int main(void)
    initUARTs();
    initPWM();
    initMillisecondTimer();
+   initWatchdog();
    
    __enable_irq();   // Enable all interrupts
    
@@ -693,6 +734,7 @@ int main(void)
             printf("millis() = %ld\n", millis());
          }
          
+         nudgeWatchdog();
          Tick = 0;
       }
       
@@ -716,6 +758,10 @@ int main(void)
          case 's':
          case 'S':
             softwareReset();
+            break;
+         case 'w':
+         case 'W':
+            testWatchdog();
             break;
          }
       }
