@@ -40,7 +40,7 @@ struct UART_BUFFER
 // UART buffers
 struct UART_BUFFER U1Buf;
 struct UART_BUFFER U2Buf;
-struct UART_BUFFER U3Buf;
+struct UART_BUFFER U6Buf;
 
 uint32_t SavedRccCsr = 0u;
 volatile uint32_t Milliseconds = 0;
@@ -124,28 +124,28 @@ void USART2_IRQHandler(void)
 void USART6_IRQHandler(void)
 {
    if (USART6->SR & USART_SR_RXNE) {
-      const uint8_t tmphead = (U3Buf.rx.head + 1) & UART_RX_BUFFER_MASK;
+      const uint8_t tmphead = (U6Buf.rx.head + 1) & UART_RX_BUFFER_MASK;
       const uint8_t ch = USART6->DR;  // Read received byte from UART
       
-      if (tmphead == U3Buf.rx.tail)   // Is receive buffer full?
+      if (tmphead == U6Buf.rx.tail)   // Is receive buffer full?
       {
           // Buffer is full; discard new byte
       }
       else
       {
-         U3Buf.rx.head = tmphead;
-         U3Buf.rx.buf[tmphead] = ch;   // Store byte in buffer
+         U6Buf.rx.head = tmphead;
+         U6Buf.rx.buf[tmphead] = ch;   // Store byte in buffer
       }
    }
    
    if (USART6->SR & USART_SR_TXE) {
-      if (U3Buf.tx.head != U3Buf.tx.tail) // Is there anything to send?
+      if (U6Buf.tx.head != U6Buf.tx.tail) // Is there anything to send?
       {
-         const uint8_t tmptail = (U3Buf.tx.tail + 1) & UART_TX_BUFFER_MASK;
+         const uint8_t tmptail = (U6Buf.tx.tail + 1) & UART_TX_BUFFER_MASK;
          
-         U3Buf.tx.tail = tmptail;
+         U6Buf.tx.tail = tmptail;
 
-         USART6->DR = U3Buf.tx.buf[tmptail];    // Transmit one byte
+         USART6->DR = U6Buf.tx.buf[tmptail];    // Transmit one byte
       }
       else
       {
@@ -241,13 +241,13 @@ void UART2TxByte(const uint8_t data)
 
 void UART6TxByte(const uint8_t data)
 {
-   const uint8_t tmphead = (U3Buf.tx.head + 1) & UART_TX_BUFFER_MASK;
+   const uint8_t tmphead = (U6Buf.tx.head + 1) & UART_TX_BUFFER_MASK;
    
-   while (tmphead == U3Buf.tx.tail)   // Wait, if buffer is full
+   while (tmphead == U6Buf.tx.tail)   // Wait, if buffer is full
        ;
 
-   U3Buf.tx.buf[tmphead] = data;
-   U3Buf.tx.head = tmphead;
+   U6Buf.tx.buf[tmphead] = data;
+   U6Buf.tx.head = tmphead;
 
    USART6->CR1 |= USART_CR1_TXEIE;   // Enable UART6 Tx Empty interrupt
 }
@@ -374,7 +374,7 @@ void printDeviceID(void)
 
 void printSerialNumber(void)
 {
-   // See STM32F103xx Reference Manual RM0008, section 30.2
+   // See STM32F411xC/E Reference Manual RM0383, section 24.1
    const uint32_t *const id = (const uint32_t *const)UID_BASE;
    
    printf("Serial Number = %08x %08x %08x\n", id[0], id[1], id[2]);
@@ -551,7 +551,6 @@ static void initGPIOs(void)
 static void initUARTs(void)
 {
    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;        // Enable clock to GPIO A peripherals on AHB1 bus
-   RCC->AHB1ENR |= RCC_AHB1ENR_GPIODEN;        // Enable clock to GPIO D peripherals on AHB1 bus
    RCC->APB2ENR |= RCC_APB2ENR_USART1EN;       // Enable USART1 clock
    RCC->APB1ENR |= RCC_APB1ENR_USART2EN;       // Enable USART2 clock
    RCC->APB2ENR |= RCC_APB2ENR_USART6EN;       // Enable USART6 clock
@@ -584,46 +583,46 @@ static void initUARTs(void)
    U2Buf.tx.tail = 0;
    U2Buf.rx.head = 0;
    U2Buf.rx.tail = 0;
-#if 0
+   
    // Configure PA2, the GPIO pin with alternative function TxD2
-   GPIOA->CRL &= ~(GPIO_CRL_MODE2 | GPIO_CRL_CNF2);       // Clear configuration bits for PA2
-   GPIOA->CRL |= GPIO_CRL_CNF2_1 | GPIO_CRL_MODE2_0 | GPIO_CRL_MODE2_1;     // Configure PA2 as alternate function, push-pull
+   GPIOA->MODER |= GPIO_MODER_MODER2_1;        // PA2 in Alternative Function mode
+   GPIOA->AFR[0] |= 7 << 8;                    // Configure PA2 as alternate function, AF7, UART2
    
    // Configure PA3, the GPIO pin with alternative function RxD2
-   GPIOA->CRL &= ~(GPIO_CRL_MODE3 | GPIO_CRL_CNF3);       // Clear configuration bits for PA3
-   GPIOA->CRL |= GPIO_CRL_CNF3_1;                         // Configure PA3 as alternate function, floating input
-#endif
+   GPIOA->MODER |= GPIO_MODER_MODER3_1;        // PA3 in Alternative Function mode
+   GPIOA->AFR[0] |= 7 << 12;                   // Configure PA3 as alternate function, AF7, UART2
+   
    // Configure UART2 - defaults are 1 start bit, 8 data bits, 1 stop bit, no parity
    USART2->CR1 |= USART_CR1_UE;           // Switch on the UART
-   USART2->BRR |= (234<<4) | 6;           // Set for 9600 baud (reference manual page 799) 36000000 / (16 * 9600)
+   USART2->BRR |= (325<<4) | 8;           // Set for 9600 baud (reference manual page 518) 50000000 / (16 * 9600)
    USART2->CR1 |= USART_CR1_RXNEIE;       // Enable Rx Not Empty interrupt
    USART2->CR1 |= USART_CR1_TE;           // Enable transmitter (sends a junk character)
    USART2->CR1 |= USART_CR1_RE;           // Enable receiver
 
-   //NVIC_EnableIRQ(USART2_IRQn);
+   NVIC_EnableIRQ(USART2_IRQn);
    
    // Set up UART6 and associated circular buffers
-   U3Buf.tx.head = 0;
-   U3Buf.tx.tail = 0;
-   U3Buf.rx.head = 0;
-   U3Buf.rx.tail = 0;
-#if 0
-   // Configure PB10, the GPIO pin with alternative function TxD6
-   GPIOB->CRH &= ~(GPIO_CRH_MODE10 | GPIO_CRH_CNF10);     // Clear configuration bits for PB10
-   GPIOB->CRH |= GPIO_CRH_CNF10_1 | GPIO_CRH_MODE10_0 | GPIO_CRH_MODE10_1;  // Configure PB10 as alternate function, push-pull
+   U6Buf.tx.head = 0;
+   U6Buf.tx.tail = 0;
+   U6Buf.rx.head = 0;
+   U6Buf.rx.tail = 0;
    
-   // Configure PB11, the GPIO pin with alternative function RxD6
-   GPIOB->CRH &= ~(GPIO_CRH_MODE11 | GPIO_CRH_CNF11);     // Clear configuration bits for PB11
-   GPIOB->CRH |= GPIO_CRH_CNF11_1;                        // Configure PB11 as alternate function, floating input
-#endif
+   // Configure PA11, the GPIO pin with alternative function TxD6
+   GPIOA->MODER |= GPIO_MODER_MODER11_1;       // PA11 in Alternative Function mode
+   GPIOA->AFR[1] |= 8 << 12;                   // Configure PA11 as alternate function, AF8, UART6
+   
+   // Configure PA12, the GPIO pin with alternative function RxD6
+   GPIOA->MODER |= GPIO_MODER_MODER12_1;       // PA12 in Alternative Function mode
+   GPIOA->AFR[1] |= 8 << 16;                   // Configure PA12 as alternate function, AF8, UART6
+   
 // Configure UART6 - defaults are 1 start bit, 8 data bits, 1 stop bit, no parity
    USART6->CR1 |= USART_CR1_UE;           // Switch on the UART
-   USART1->BRR |= (651<<4) | 1;           // Set for 9600 baud (reference manual page 518) 100000000 / (16 * 9600)
+   USART6->BRR |= (651<<4) | 1;           // Set for 9600 baud (reference manual page 518) 100000000 / (16 * 9600)
    USART6->CR1 |= USART_CR1_RXNEIE;       // Enable Rx Not Empty interrupt
    USART6->CR1 |= USART_CR1_TE;           // Enable transmitter (sends a junk character)
    USART6->CR1 |= USART_CR1_RE;           // Enable receiver
    
-   //NVIC_EnableIRQ(USART6_IRQn);
+   NVIC_EnableIRQ(USART6_IRQn);
 }
 
 
@@ -631,26 +630,25 @@ static void initUARTs(void)
 
 static void initPWM(void)
 {
-#if 0
    // Configure Reset and Clock Control
    RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;                    // Enable clock to TIM3 peripheral on APB1 bus
-   RCC->APB2ENR |= RCC_APB2ENR_IOPAEN;                    // Enable clock to GPIO A peripherals on APB2 bus
-   RCC->APB2ENR |= RCC_APB2ENR_IOPBEN;                    // Enable clock to GPIO B peripherals on APB2 bus
+   RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;                   // Enable clock to GPIO A peripherals on AHB1 bus
+   RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;                   // Enable clock to GPIO B peripherals on AHB1 bus
    
    // Configure PA6, the GPIO pin with alternative function T3C1
-   GPIOA->CRL &= ~(GPIO_CRL_MODE6 | GPIO_CRL_CNF6);       // Clear configuration bits for PA6
-   GPIOA->CRL |= GPIO_CRL_CNF6_1 | GPIO_CRL_MODE6_0 | GPIO_CRL_MODE6_1;     // Configure PA6 as alternate function, push-pull
+   GPIOA->MODER |= GPIO_MODER_MODER6_1;        // PA6 in Alternative Function mode
+   GPIOA->AFR[0] |= 2 << 24;                   // Configure PA6 as alternate function, AF2, TIM3
    
    // Configure PA7, the GPIO pin with alternative function T3C2
-   GPIOA->CRL &= ~(GPIO_CRL_MODE7 | GPIO_CRL_CNF7);       // Clear configuration bits for PA7
-   GPIOA->CRL |= GPIO_CRL_CNF7_1 | GPIO_CRL_MODE7_0 | GPIO_CRL_MODE7_1;     // Configure PA6 as alternate function, push-pull
+   GPIOA->MODER |= GPIO_MODER_MODER7_1;        // PA7 in Alternative Function mode
+   GPIOA->AFR[0] |= 2 << 28;                   // Configure PA7 as alternate function, AF2, TIM3
    
    // Configure PB0, the GPIO pin with alternative function T3C3
-   GPIOB->CRL &= ~(GPIO_CRL_MODE0 | GPIO_CRL_CNF0);       // Clear configuration bits for PB0
-   GPIOB->CRL |= GPIO_CRL_CNF0_1 | GPIO_CRL_MODE0_0 | GPIO_CRL_MODE0_1;     // Configure PB0 as alternate function, push-pull
+   GPIOB->MODER |= GPIO_MODER_MODER0_1;        // PB0 in Alternative Function mode
+   GPIOB->AFR[0] |= 2 << 0;                    // Configure PB0 as alternate function, AF2, TIM3
    
    // Don't configure PB1, the GPIO pin with alternative function T3C4, not needed
-#endif
+   
    // Configure Timer 3 for triple PWM generation
    TIM3->CCMR1 =  TIM_CCMR1_OC1PE | TIM_CCMR1_OC1M_2 | TIM_CCMR1_OC1M_1; // Timer output compare mode PWM for T3C1
    TIM3->CCMR1 |= TIM_CCMR1_OC2PE | TIM_CCMR1_OC2M_2 | TIM_CCMR1_OC2M_1; // Timer output compare mode PWM for T3C2
@@ -701,7 +699,7 @@ int main(void)
    initMCU();
    initGPIOs();
    initUARTs();
-   //initPWM();
+   initPWM();
    initMillisecondTimer();
    initWatchdog();
    
@@ -728,7 +726,7 @@ int main(void)
          else
             fade++;
             
-         //setRGBLed(ledState, fade);
+         setRGBLed(ledState, fade);
          
          if (millis() >= end) {
             end = millis() + 500u;
@@ -741,7 +739,7 @@ int main(void)
             }
             
             flag = !flag;
-#if 0 
+            
             UART2TxByte('U');
             UART2TxByte('2');
             UART2TxByte(' ');
@@ -751,17 +749,17 @@ int main(void)
             UART2TxByte('3');
             UART2TxByte('2');
             UART2TxByte(' ');
-
-            UART3TxByte('U');
-            UART3TxByte('3');
-            UART3TxByte(' ');
-            UART3TxByte('S');
-            UART3TxByte('T');
-            UART3TxByte('M');
-            UART3TxByte('3');
-            UART3TxByte('2');
-            UART3TxByte(' ');
-#endif
+            
+            UART6TxByte('U');
+            UART6TxByte('6');
+            UART6TxByte(' ');
+            UART6TxByte('S');
+            UART6TxByte('T');
+            UART6TxByte('M');
+            UART6TxByte('3');
+            UART6TxByte('2');
+            UART6TxByte(' ');
+            
             printf("millis() = %ld\n", millis());
          }
          
