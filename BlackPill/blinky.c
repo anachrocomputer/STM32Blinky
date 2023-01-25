@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #define UART_RX_BUFFER_SIZE  (128)
 #define UART_RX_BUFFER_MASK (UART_RX_BUFFER_SIZE - 1)
@@ -526,8 +527,12 @@ static void initMCU(void)
 static void initGPIOs(void)
 {
    // Configure Reset and Clock Control
+   RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;      // Enable clock to GPIO A peripherals on AHB1 bus
    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;      // Enable clock to GPIO B peripherals on AHB1 bus
    RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN;      // Enable clock to GPIO C peripherals on AHB1 bus
+   
+   // Configure PA0, the GPIO pin with the button
+   GPIOA->PUPDR |= GPIO_PUPDR_PUPD0_0;       // Enable pull-up on PA0
    
    // Configure PB12, the GPIO pin with the red LED
    GPIOB->MODER |= GPIO_MODER_MODER12_0;     // Configure PB12 as output for the red LED
@@ -692,6 +697,8 @@ static void initWatchdog(void)
 int main(void)
 {
    int ledState = 0;
+   bool buttonState = false;
+   int presses = 0;
    uint8_t fade = 0;
    uint32_t end;
    uint8_t flag = 0;
@@ -715,6 +722,17 @@ int main(void)
    
    while (1) {
       if (Tick) {
+         const bool button = (GPIOA->IDR & GPIO_IDR_ID0) ? false: true;
+         
+         if (button != buttonState) {
+            if (button)
+               printf("PA0 LOW: key pressed %d\n", ++presses);
+            else
+               printf("PA0 HIGH\n");
+            
+            buttonState = button;
+         }
+         
          if (fade == 255) {
             fade = 0;
 
